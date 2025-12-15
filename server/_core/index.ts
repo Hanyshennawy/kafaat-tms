@@ -11,7 +11,7 @@ import { registerAzureADRoutes } from "../auth/azure-ad";
 import { registerMarketplaceRoutes } from "../marketplace/azure-marketplace";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { serveStatic } from "./static";
 import { trialService } from "../services/trial.service";
 
 // Application start time for uptime calculation
@@ -130,8 +130,10 @@ async function startServer() {
     })
   );
   
-  // development mode uses Vite, production mode uses static files
+  // development mode uses Vite (dynamically imported), production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    // Dynamic import to avoid bundling vite in production
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
     serveStatic(app);
