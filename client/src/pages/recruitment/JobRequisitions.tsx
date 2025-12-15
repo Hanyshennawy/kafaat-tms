@@ -171,6 +171,10 @@ export default function JobRequisitions() {
       resetForm();
       refetch();
     },
+    onError: (error) => {
+      console.error("Failed to create requisition:", error);
+      toast.error(error.message || "Failed to create requisition. Check database connection.");
+    },
   });
 
   const resetForm = () => {

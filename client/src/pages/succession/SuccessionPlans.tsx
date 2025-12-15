@@ -143,6 +143,10 @@ export default function SuccessionPlans() {
       setShowTemplates(true);
       refetch();
     },
+    onError: (error) => {
+      console.error("Failed to create succession plan:", error);
+      toast.error(error.message || "Failed to create plan. Check database connection.");
+    },
   });
 
   const applyTemplate = (template: typeof POSITION_TEMPLATES[0]) => {

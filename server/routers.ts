@@ -56,8 +56,8 @@ const careerProgressionRouter = router({
       const [result] = await database.insert(careerPaths).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: careerPaths.id });
+      return { id: result.id };
     }),
   
   updatePath: protectedProcedure
@@ -97,8 +97,8 @@ const careerProgressionRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(careerPathSteps).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(careerPathSteps).values(input).returning({ id: careerPathSteps.id });
+      return { id: result.id };
     }),
   
   // Skills
@@ -116,8 +116,8 @@ const careerProgressionRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(skills).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(skills).values(input).returning({ id: skills.id });
+      return { id: result.id };
     }),
   
   getEmployeeSkills: protectedProcedure
@@ -140,8 +140,8 @@ const careerProgressionRouter = router({
         ...input,
         verifiedBy: ctx.user.id,
         verifiedAt: new Date(),
-      });
-      return { id: result.insertId };
+      }).returning({ id: employeeSkills.id });
+      return { id: result.id };
     }),
   
   getSkillGaps: protectedProcedure
@@ -230,8 +230,8 @@ const successionPlanningRouter = router({
       const [result] = await database.insert(successionPlans).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: successionPlans.id });
+      return { id: result.id };
     }),
   
   updatePlan: protectedProcedure
@@ -268,8 +268,8 @@ const successionPlanningRouter = router({
       const [result] = await database.insert(talentPools).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: talentPools.id });
+      return { id: result.id };
     }),
   
   getTalentPoolMembers: protectedProcedure
@@ -292,8 +292,8 @@ const successionPlanningRouter = router({
       const [result] = await database.insert(talentPoolMembers).values({
         ...input,
         addedBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: talentPoolMembers.id });
+      return { id: result.id };
     }),
   
   getSuccessors: protectedProcedure
@@ -316,8 +316,8 @@ const successionPlanningRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(successors).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(successors).values(input).returning({ id: successors.id });
+      return { id: result.id };
     }),
   
   getLeadershipAssessments: protectedProcedure
@@ -342,8 +342,8 @@ const successionPlanningRouter = router({
       const [result] = await database.insert(leadershipAssessments).values({
         ...input,
         assessedBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: leadershipAssessments.id });
+      return { id: result.id };
     }),
 });
 
@@ -376,8 +376,8 @@ const workforcePlanningRouter = router({
       const [result] = await database.insert(workforceScenarios).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: workforceScenarios.id });
+      return { id: result.id };
     }),
   
   updateScenario: protectedProcedure
@@ -484,8 +484,8 @@ const workforcePlanningRouter = router({
       const [result] = await database.insert(resourceAllocations).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: resourceAllocations.id });
+      return { id: result.id };
     }),
   
   getWorkforceAlerts: protectedProcedure.query(async () => {
@@ -538,8 +538,8 @@ const employeeEngagementRouter = router({
       const [result] = await database.insert(surveys).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: surveys.id });
+      return { id: result.id };
     }),
   
   updateSurvey: protectedProcedure
@@ -579,8 +579,8 @@ const employeeEngagementRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(surveyQuestions).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(surveyQuestions).values(input).returning({ id: surveyQuestions.id });
+      return { id: result.id };
     }),
   
   submitSurveyResponse: protectedProcedure
@@ -599,9 +599,9 @@ const employeeEngagementRouter = router({
       const [responseResult] = await database.insert(surveyResponses).values({
         surveyId: input.surveyId,
         employeeId: ctx.user.id,
-      });
+      }).returning({ id: surveyResponses.id });
       
-      const responseId = responseResult.insertId;
+      const responseId = responseResult.id;
       
       for (const answer of input.answers) {
         await database.insert(surveyAnswers).values({
@@ -637,8 +637,8 @@ const employeeEngagementRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(engagementActivities).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(engagementActivities).values(input).returning({ id: engagementActivities.id });
+      return { id: result.id };
     }),
   
   getEngagementScore: protectedProcedure
@@ -733,8 +733,8 @@ const recruitmentRouter = router({
       const [result] = await database.insert(jobRequisitions).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: jobRequisitions.id });
+      return { id: result.id };
     }),
   
   updateRequisition: protectedProcedure
@@ -779,8 +779,8 @@ const recruitmentRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(candidates).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(candidates).values(input).returning({ id: candidates.id });
+      return { id: result.id };
     }),
   
   parseResume: protectedProcedure
@@ -819,8 +819,8 @@ const recruitmentRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(candidateApplications).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(candidateApplications).values(input).returning({ id: candidateApplications.id });
+      return { id: result.id };
     }),
   
   getInterviews: protectedProcedure
@@ -843,8 +843,8 @@ const recruitmentRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(interviews).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(interviews).values(input).returning({ id: interviews.id });
+      return { id: result.id };
     }),
   
   getAssessments: protectedProcedure
@@ -867,8 +867,8 @@ const recruitmentRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(assessments).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(assessments).values(input).returning({ id: assessments.id });
+      return { id: result.id };
     }),
   
   matchCandidates: protectedProcedure
@@ -968,8 +968,8 @@ const performanceManagementRouter = router({
       const [result] = await database.insert(performanceCycles).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: performanceCycles.id });
+      return { id: result.id };
     }),
   
   updateCycle: protectedProcedure
@@ -1015,8 +1015,8 @@ const performanceManagementRouter = router({
       const [result] = await database.insert(goals).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: goals.id });
+      return { id: result.id };
     }),
   
   updateGoalProgress: protectedProcedure
@@ -1032,8 +1032,8 @@ const performanceManagementRouter = router({
       const [result] = await database.insert(goalProgress).values({
         ...input,
         updatedBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: goalProgress.id });
+      return { id: result.id };
     }),
   
   submitSelfAppraisal: protectedProcedure
@@ -1051,8 +1051,8 @@ const performanceManagementRouter = router({
       const [result] = await database.insert(selfAppraisals).values({
         ...input,
         employeeId: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: selfAppraisals.id });
+      return { id: result.id };
     }),
   
   submitManagerReview: protectedProcedure
@@ -1072,8 +1072,8 @@ const performanceManagementRouter = router({
       const [result] = await database.insert(managerReviews).values({
         ...input,
         managerId: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: managerReviews.id });
+      return { id: result.id };
     }),
   
   submit360Feedback: protectedProcedure
@@ -1094,8 +1094,8 @@ const performanceManagementRouter = router({
       const [result] = await database.insert(feedback360).values({
         ...input,
         feedbackFrom: input.isAnonymous ? null : ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: feedback360.id });
+      return { id: result.id };
     }),
   
   get360Feedback: protectedProcedure
@@ -1180,8 +1180,8 @@ const teachersLicensingRouter = router({
         ...input,
         applicantId: ctx.user.id,
         applicationNumber,
-      });
-      return { id: result.insertId, applicationNumber };
+      }).returning({ id: licenseApplications.id });
+      return { id: result.id, applicationNumber };
     }),
   
   updateApplication: protectedProcedure
@@ -1234,8 +1234,8 @@ const teachersLicensingRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(applicationDocuments).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(applicationDocuments).values(input).returning({ id: applicationDocuments.id });
+      return { id: result.id };
     }),
   
   verifyDocument: protectedProcedure
@@ -1421,8 +1421,8 @@ const teachersLicensingRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(cpdRecords).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(cpdRecords).values(input).returning({ id: cpdRecords.id });
+      return { id: result.id };
     }),
   
   verifyCpdRecord: protectedProcedure
@@ -1464,8 +1464,8 @@ const teachersLicensingRouter = router({
       const [result] = await database.insert(assessmentResults).values({
         ...input,
         passed,
-      });
-      return { id: result.insertId, passed };
+      }).returning({ id: assessmentResults.id });
+      return { id: result.id, passed };
     }),
 });
 
@@ -1531,8 +1531,8 @@ const ratingsRouter = router({
       const [result] = await database.insert(ratings).values({
         ...input,
         userId: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: ratings.id });
+      return { id: result.id };
     }),
 });
 
@@ -1561,11 +1561,11 @@ const reportsRouter = router({
       const [result] = await database.insert(reports).values({
         ...input,
         generatedBy: ctx.user.id,
-      });
+      }).returning({ id: reports.id });
       
       // TODO: Implement actual report generation
       
-      return { id: result.insertId };
+      return { id: result.id };
     }),
 });
 
@@ -1595,8 +1595,8 @@ const organizationRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(departments).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(departments).values(input).returning({ id: departments.id });
+      return { id: result.id };
     }),
   
   getAllPositions: protectedProcedure.query(async () => {
@@ -1620,8 +1620,8 @@ const organizationRouter = router({
       const database = await getDb();
       if (!database) throw new Error("Database not available");
       
-      const [result] = await database.insert(positions).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(positions).values(input).returning({ id: positions.id });
+      return { id: result.id };
     }),
 });
 

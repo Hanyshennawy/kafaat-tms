@@ -53,9 +53,9 @@ export class TenantService {
       trialEndsAt: data.marketplacePurchaseToken
         ? null
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day trial
-    });
+    }).returning({ id: tenants.id });
 
-    return this.getTenantById(result.insertId);
+    return this.getTenantById(result.id);
   }
 
   /**
@@ -238,12 +238,12 @@ export class TenantService {
       endDate,
       marketplaceSubscriptionId: data.marketplaceSubscriptionId,
       nextBillingDate: endDate,
-    });
+    }).returning({ id: tenantSubscriptions.id });
 
     await this.logAuditEvent(data.tenantId, null, {
       action: "subscription.created",
       resourceType: "subscription",
-      resourceId: String(result.insertId),
+      resourceId: String(result.id),
       severity: "info",
       metadata: { planId: data.planId },
     });
@@ -251,7 +251,7 @@ export class TenantService {
     const subscription = await db
       .select()
       .from(tenantSubscriptions)
-      .where(eq(tenantSubscriptions.id, result.insertId))
+      .where(eq(tenantSubscriptions.id, result.id))
       .limit(1);
 
     return subscription[0] || null;

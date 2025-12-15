@@ -153,6 +153,10 @@ export default function CareerPaths() {
       setShowTemplates(true);
       refetch();
     },
+    onError: (error) => {
+      console.error("Failed to create career path:", error);
+      toast.error(error.message || "Failed to create career path. Check database connection.");
+    },
   });
 
   const filteredPaths = careerPaths?.filter(path =>

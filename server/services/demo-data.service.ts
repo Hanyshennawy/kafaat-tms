@@ -120,8 +120,8 @@ export class DemoDataSeeder {
           const [result] = await db.insert(departments).values({
             name: dept.name,
             description: dept.description,
-          });
-          deptMap.set(dept.name, result.insertId);
+          }).returning({ id: departments.id });
+          deptMap.set(dept.name, result.id);
           stats.departments++;
         } catch (err) {
           console.warn(`[DemoSeeder] Could not insert department ${dept.name}:`, err);
@@ -138,8 +138,8 @@ export class DemoDataSeeder {
             departmentId: deptId || null,
             level: pos.level,
             description: `Position: ${pos.title}`,
-          });
-          posMap.set(pos.title, result.insertId);
+          }).returning({ id: positions.id });
+          posMap.set(pos.title, result.id);
           stats.positions++;
         } catch (err) {
           console.warn(`[DemoSeeder] Could not insert position ${pos.title}:`, err);
