@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1762313612532,
+      "tag": "0000_mysterious_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1762327201092,
+      "tag": "0001_stale_mockingbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1762328408737,
+      "tag": "0002_friendly_sharon_ventura",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+# =============================================================================
+# KAFAAT 1.0 - RENDER DEPLOYMENT CONFIGURATION
+# =============================================================================
+# This file defines the complete infrastructure for Render deployment
+# Database: PlanetScale MySQL (free tier)
+# Web Service: Node.js with Docker
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # WEB SERVICE - Main Application
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: kafaat-tms
+    runtime: docker
+    region: oregon # Change to frankfurt or singapore if needed
+    plan: free # Can upgrade to starter ($7/mo) or standard ($25/mo)
+    
+    # Docker configuration
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Auto-deploy from main branch
+    branch: main
+    
+    # Build configuration
+    buildFilter:
+      paths:
+        - "**/*.ts"
+        - "**/*.tsx"
+        - "**/*.json"
+        - "Dockerfile"
+        - "package.json"
+        - "package-lock.json"
+    
+    # Environment variables (will be set via CLI or dashboard)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      
+      - key: PORT
+        value: 3000
+      
+      # Database (will be filled after PlanetScale setup)
+      - key: DATABASE_URL
+        sync: false # Will set manually
+      
+      # Session secret (generate secure value)
+      - key: SESSION_SECRET
+        generateValue: true
+      
+      # AI Configuration (Together.ai - Free Tier)
+      - key: TOGETHER_API_KEY
+        sync: false
+      
+      - key: TOGETHER_MODEL
+        value: meta-llama/Llama-3.2-3B-Instruct-Turbo
+      
+      - key: TOGETHER_BASE_URL
+        value: https://api.together.xyz/v1
+      
+      - key: TOGETHER_TIMEOUT
+        value: 30000
+      
+      # OpenAI (Optional - for psychometric assessments)
+      - key: OPENAI_API_KEY
+        sync: false
+      
+      # Azure AD (Optional - for SSO)
+      - key: AZURE_AD_CLIENT_ID
+        sync: false
+      
+      - key: AZURE_AD_CLIENT_SECRET
+        sync: false
+      
+      - key: AZURE_AD_TENANT_ID
+        value: common
+      
+      - key: AZURE_AD_REDIRECT_URI
+        sync: false # Will be: https://kafaat-tms.onrender.com/api/auth/azure/callback
+      
+      # Email (Optional)
+      - key: SMTP_HOST
+        value: smtp.sendgrid.net
+      
+      - key: SMTP_PORT
+        value: 587
+      
+      - key: SMTP_USER
+        sync: false
+      
+      - key: SMTP_PASSWORD
+        sync: false
+      
+      - key: EMAIL_FROM
+        value: noreply@kafaat.ae
+      
+      # Feature Flags
+      - key: FEATURE_AI_RECOMMENDATIONS
+        value: true
+      
+      - key: FEATURE_PSYCHOMETRIC_ASSESSMENTS
+        value: true
+      
+      - key: FEATURE_BLOCKCHAIN_VERIFICATION
+        value: false
+      
+      - key: FEATURE_MULTI_TENANCY
+        value: true
+      
+      - key: FEATURE_MARKETPLACE_INTEGRATION
+        value: true
+      
+      # TDRA Compliance
+      - key: TDRA_COMPLIANCE_ENABLED
+        value: true
+      
+      - key: TDRA_ALLOWED_REGIONS
+        value: ae-north-1,ae-south-1
+      
+      - key: TDRA_PRIMARY_REGION
+        value: ae-north-1
+      
+      - key: TDRA_CONSENT_RETENTION_DAYS
+        value: 2555
+      
+      - key: TDRA_AUDIT_RETENTION_DAYS
+        value: 1825
+      
+      # Logging
+      - key: LOG_LEVEL
+        value: info
+      
+      # CORS (will update after deployment)
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://kafaat-tms.onrender.com,http://localhost:5173
+
+# =============================================================================
+# DATABASE SETUP INSTRUCTIONS
+# =============================================================================
+# 
+# 1. CREATE PLANETSCALE DATABASE (FREE TIER - 5GB storage, 1 billion row reads/mo)
+#    - Go to: https://planetscale.com/signup
+#    - Create account
+#    - Create database: kafaat-tms
+#    - Region: AWS us-east-1 (closest to Render Oregon)
+#    - Create password and copy connection string
+#
+# 2. GET DATABASE CONNECTION STRING
+#    - Format: mysql://user:password@host:3306/kafaat-tms?ssl={"rejectUnauthorized":true}
+#    - Add to Render environment: DATABASE_URL
+#
+# 3. ALTERNATIVE: RENDER POSTGRESQL (If you want single provider)
+#    - Render offers free PostgreSQL (256MB, expires after 90 days)
+#    - Would require migrating Drizzle schema from MySQL to PostgreSQL
+#    - Command: render services:create postgresql kafaat-tms-db
+#
+# =============================================================================
+# DEPLOYMENT INSTRUCTIONS
+# =============================================================================
+#
+# STEP 1: Authenticate with Render
+# render login
+#
+# STEP 2: Create new service from this config
+# render services:create
+#
+# STEP 3: Set environment variables
+# render env:set DATABASE_URL="mysql://..."
+# render env:set TOGETHER_API_KEY="your_key"
+#
+# STEP 4: Deploy
+# git push origin main
+#
+# STEP 5: Run database migrations
+# render shell kafaat-tms
+# npm run db:push
+#
+# =============================================================================

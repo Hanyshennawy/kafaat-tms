@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS question_banks (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  name VARCHAR(255) NOT NULL,\n  description TEXT,\n  license_type_id INT,\n  license_tier_id INT,\n  job_role VARCHAR(100),\n  subject_area VARCHAR(100),\n  is_active BOOLEAN DEFAULT TRUE NOT NULL,\n  created_by INT NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL\n)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 48xV2NNkYhgRs4A.b30bfce818b9 --database NcrAoq6ZrsG5hkAt4QiNkD --execute CREATE TABLE IF NOT EXISTS question_banks (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  name VARCHAR(255) NOT NULL,\n  description TEXT,\n  license_type_id INT,\n  license_tier_id INT,\n  job_role VARCHAR(100),\n  subject_area VARCHAR(100),\n  is_active BOOLEAN DEFAULT TRUE NOT NULL,\n  created_by INT NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL\n)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1663
+}

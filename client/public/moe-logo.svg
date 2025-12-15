@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- UAE Ministry of Education Inspired Logo -->
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#D4AF37;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#F4D03F;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D4AF37;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#006600;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#228B22;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#CC0000;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF3333;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer Circle -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="url(#goldGrad)" stroke-width="3"/>
+  
+  <!-- UAE Flag Colors - Vertical Bar -->
+  <rect x="5" y="50" width="15" height="100" fill="url(#greenGrad)"/>
+  <rect x="5" y="50" width="15" height="33" fill="#FF0000"/>
+  <rect x="5" y="83" width="15" height="33" fill="#FFFFFF" stroke="#ccc" stroke-width="0.5"/>
+  <rect x="5" y="116" width="15" height="34" fill="#000000"/>
+  
+  <!-- Open Book Symbol -->
+  <g transform="translate(100, 90)">
+    <!-- Left page -->
+    <path d="M-5,0 Q-30,-5 -50,10 L-50,50 Q-30,35 -5,40 Z" fill="#FFFFFF" stroke="url(#goldGrad)" stroke-width="2"/>
+    <!-- Right page -->
+    <path d="M5,0 Q30,-5 50,10 L50,50 Q30,35 5,40 Z" fill="#FFFFFF" stroke="url(#goldGrad)" stroke-width="2"/>
+    <!-- Book spine -->
+    <path d="M-5,0 L0,-5 L5,0 L5,40 L0,45 L-5,40 Z" fill="url(#goldGrad)"/>
+    <!-- Page lines - left -->
+    <line x1="-15" y1="15" x2="-40" y2="20" stroke="#ddd" stroke-width="1"/>
+    <line x1="-15" y1="22" x2="-40" y2="27" stroke="#ddd" stroke-width="1"/>
+    <line x1="-15" y1="29" x2="-40" y2="34" stroke="#ddd" stroke-width="1"/>
+    <!-- Page lines - right -->
+    <line x1="15" y1="15" x2="40" y2="20" stroke="#ddd" stroke-width="1"/>
+    <line x1="15" y1="22" x2="40" y2="27" stroke="#ddd" stroke-width="1"/>
+    <line x1="15" y1="29" x2="40" y2="34" stroke="#ddd" stroke-width="1"/>
+  </g>
+  
+  <!-- Torch/Flame of Knowledge -->
+  <g transform="translate(100, 55)">
+    <ellipse cx="0" cy="0" rx="10" ry="15" fill="url(#redGrad)"/>
+    <ellipse cx="0" cy="-5" rx="6" ry="10" fill="#FF6600"/>
+    <ellipse cx="0" cy="-8" rx="3" ry="6" fill="#FFCC00"/>
+  </g>
+  
+  <!-- Arabic-inspired decorative arches -->
+  <path d="M40,170 Q70,150 100,155 Q130,150 160,170" fill="none" stroke="url(#goldGrad)" stroke-width="2"/>
+  
+  <!-- Stars representing Emirates -->
+  <g fill="url(#goldGrad)">
+    <polygon points="100,165 102,171 108,171 103,175 105,181 100,177 95,181 97,175 92,171 98,171" transform="scale(0.7) translate(43,90)"/>
+    <polygon points="100,165 102,171 108,171 103,175 105,181 100,177 95,181 97,175 92,171 98,171" transform="scale(0.5) translate(100,160)"/>
+    <polygon points="100,165 102,171 108,171 103,175 105,181 100,177 95,181 97,175 92,171 98,171" transform="scale(0.5) translate(130,160)"/>
+  </g>
+  
+  <!-- Text "Ministry of Education" placeholder -->
+  <text x="100" y="195" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#333">وزارة التربية والتعليم</text>
+</svg>

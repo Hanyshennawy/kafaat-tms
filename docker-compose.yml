@@ -1,0 +1,103 @@
+# =============================================================================
+# KAFAAT 1.0 - DOCKER COMPOSE FOR LOCAL DEVELOPMENT
+# Includes MySQL database, application, and optional services
+# =============================================================================
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: kafaat-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: kafaat_tms
+      MYSQL_USER: kafaat
+      MYSQL_PASSWORD: kafaat_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./drizzle/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "kafaat", "-pkafaat_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kafaat-network
+
+  # Kafaat Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kafaat-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: mysql://kafaat:kafaat_password@mysql:3306/kafaat_tms
+      SESSION_SECRET: your-super-secret-session-key-min-32-characters
+      TDRA_COMPLIANCE_ENABLED: "true"
+      FEATURE_AI_RECOMMENDATIONS: "true"
+      FEATURE_MULTI_TENANCY: "true"
+    volumes:
+      - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - kafaat-network
+
+  # Redis for session storage (optional, for production scaling)
+  redis:
+    image: redis:7-alpine
+    container_name: kafaat-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kafaat-network
+    profiles:
+      - full
+
+  # Adminer for database management (development only)
+  adminer:
+    image: adminer:latest
+    container_name: kafaat-adminer
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    ports:
+      - "8080:8080"
+    networks:
+      - kafaat-network
+    profiles:
+      - dev
+
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  kafaat-network:
+    driver: bridge

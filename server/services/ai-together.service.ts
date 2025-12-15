@@ -1,0 +1,384 @@
+/**
+ * Together.ai Integration Service
+ * 
+ * Handles AI features that require LLMs using Together.ai's Llama 3.2 3B Instruct Turbo.
+ * This service handles 35% of requests with ~1-2s latency and free tier (5M tokens/month).
+ * 
+ * Features:
+ * - Resume parsing
+ * - Interview question generation
+ * - Competency gap analysis
+ * - Licensing question generation
+ * - Job description generation
+ */
+
+import { invokeTogether } from '../_core/together';
+import { logAIUsage } from './ai-config';
+import type {
+  ResumeParseResult,
+  InterviewQuestion,
+  SkillsGapAnalysis,
+} from './ai.service';
+
+// ============================================================================
+// TOGETHER.AI SERVICE
+// ============================================================================
+
+export class TogetherAIService {
+  /**
+   * Parse resume from text
+   */
+  async parseResume(resumeText: string, tenantId?: number): Promise<ResumeParseResult> {
+    const startTime = Date.now();
+    
+    try {
+      const prompt = `Extract structured information from this resume for an education sector candidate in the UAE:
+
+${resumeText}
+
+Extract:
+- Personal info (name, email, phone)
+- Professional summary
+- Work experience (title, company, duration, description, dates)
+- Education (degree, institution, year, GPA)
+- Skills (name, proficiency level, category)
+- Certifications (name, issuer, date)
+- Languages (name, proficiency)
+- Total years of experience
+- Suggested best-fit role
+- Confidence score (0-1)
+
+Provide structured JSON output.`;
+
+      const response = await invokeTogether({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert resume parser for education sector recruitment in the UAE. Extract structured data accurately.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 2000,
+      });
+
+      const content = response.choices[0]?.message?.content || '{}';
+      const result = JSON.parse(content as string);
+
+      await logAIUsage('resumeParsing', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
+
+      return this.normalizeResumeResult(result);
+    } catch (error) {
+      console.error('[Together.ai] Resume parsing failed:', error);
+      await logAIUsage('resumeParsing', 'together', false, Date.now() - startTime);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate interview questions
+   */
+  async generateInterviewQuestions(
+    role: string,
+    requiredCompetencies: string[],
+    difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+    count: number = 10,
+    tenantId?: number
+  ): Promise<InterviewQuestion[]> {
+    const startTime = Date.now();
+    
+    try {
+      const prompt = `Generate ${count} ${difficulty} interview questions for a ${role} position in UAE education sector.
+
+Required Competencies:
+${requiredCompetencies.map(c => `- ${c}`).join('\n')}
+
+For each question provide:
+- question: The interview question
+- category: "behavioral", "technical", "situational", or "competency"
+- difficulty: "easy", "medium", or "hard"
+- expectedAnswer: Key points in ideal answer
+- evaluationCriteria: What to look for in responses
+- followUpQuestions: 2-3 follow-up questions
+
+Focus on UAE educational context, cultural sensitivity, and ministry standards.
+
+Return as JSON array with ${count} questions.`;
+
+      const response = await invokeTogether({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert education sector interviewer. Generate insightful, culturally appropriate questions for UAE schools.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 3000,
+      });
+
+      const content = response.choices[0]?.message?.content || '{}';
+      const result = JSON.parse(content as string);
+
+      await logAIUsage('interviewQuestions', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
+
+      return result.questions || result.interviewQuestions || [];
+    } catch (error) {
+      console.error('[Together.ai] Interview question generation failed:', error);
+      await logAIUsage('interviewQuestions', 'together', false, Date.now() - startTime);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze skills gap
+   */
+  async analyzeSkillsGap(
+    currentSkills: { name: string; level: number }[],
+    targetRole: string,
+    tenantId?: number
+  ): Promise<SkillsGapAnalysis> {
+    const startTime = Date.now();
+    
+    try {
+      const prompt = `Analyze the competency gap for transitioning to ${targetRole} in UAE education sector.
+
+Current Skills (0-100 proficiency):
+${currentSkills.map(s => `- ${s.name}: ${s.level}`).join('\n')}
+
+Provide JSON with:
+- currentSkills: List current skills with levels
+- requiredSkills: Skills needed for ${targetRole} with required levels (0-100)
+- gaps: Array of {skill, currentLevel, requiredLevel, gap, priority (high/medium/low), trainingOptions}
+- overallReadiness: Percentage ready for role (0-100)
+- estimatedTimeToClose: Time needed to close gaps (e.g., "6-12 months")
+- developmentPlan: Specific steps to close gaps
+- certifications: Relevant UAE/international certifications
+
+Focus on UAE Ministry of Education competency framework.`;
+
+      const response = await invokeTogether({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a UAE education sector competency development expert. Provide actionable skills gap analysis aligned with MOE standards.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 2500,
+      });
+
+      const content = response.choices[0]?.message?.content || '{}';
+      const result = JSON.parse(content as string);
+
+      await logAIUsage('competencyGapAnalysis', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
+
+      return result as SkillsGapAnalysis;
+    } catch (error) {
+      console.error('[Together.ai] Skills gap analysis failed:', error);
+      await logAIUsage('competencyGapAnalysis', 'together', false, Date.now() - startTime);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate licensing assessment questions
+   */
+  async generateLicensingQuestions(
+    jobRole: string,
+    licenseTier: string,
+    subjectArea: string,
+    difficultyLevel: string,
+    questionType: string,
+    count: number
+  ): Promise<any[]> {
+    const startTime = Date.now();
+    
+    try {
+      const prompt = `Generate ${count} high-quality ${difficultyLevel} ${questionType} questions for UAE Ministry of Education teacher licensing.
+
+Context:
+- Job Role: ${jobRole}
+- License Tier: ${licenseTier}
+- Subject Area: ${subjectArea}
+- Question Type: ${questionType}
+
+Requirements:
+- Assess competencies specific to ${jobRole} in UAE educational context
+- Include realistic teaching scenarios for ${subjectArea}
+- Difficulty: ${difficultyLevel}
+- Each question: 4 options for multiple choice
+- Include detailed explanation for correct answer
+- Tag with relevant competency areas
+
+Competency Focus Areas for ${jobRole}:
+1. Pedagogical Knowledge
+2. Subject Matter Expertise
+3. Assessment and Evaluation
+4. Classroom Management
+5. Student Engagement
+6. Differentiated Instruction
+7. Technology Integration
+8. Professional Ethics & UAE Standards
+
+Return JSON array with ${count} questions, each containing:
+- questionText: The question
+- questionContext: Scenario/context (optional)
+- options: Array of 4 answer choices
+- correctAnswer: Index of correct answer (0-3)
+- explanation: Why the answer is correct
+- points: Point value (1-5)
+- tags: Relevant competency tags`;
+
+      const response = await invokeTogether({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert UAE Ministry of Education assessment designer. Create pedagogically sound, culturally appropriate licensing questions.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 4000,
+      });
+
+      const content = response.choices[0]?.message?.content || '{}';
+      const result = JSON.parse(content as string);
+
+      await logAIUsage('licensingQuestions', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
+
+      return result.questions || [];
+    } catch (error) {
+      console.error('[Together.ai] Licensing question generation failed:', error);
+      await logAIUsage('licensingQuestions', 'together', false, Date.now() - startTime);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate job description
+   */
+  async generateJobDescription(
+    role: string,
+    department: string,
+    requirements: string[],
+    responsibilities: string[],
+    tenantId?: number
+  ): Promise<string> {
+    const startTime = Date.now();
+    
+    try {
+      const prompt = `Create a professional, compelling job description for UAE education sector:
+
+Role: ${role}
+Department: ${department}
+
+Key Requirements:
+${requirements.map(r => `- ${r}`).join('\n')}
+
+Key Responsibilities:
+${responsibilities.map(r => `- ${r}`).join('\n')}
+
+Generate a complete job description including:
+1. Position Overview
+2. Key Responsibilities (detailed)
+3. Required Qualifications
+4. Preferred Qualifications
+5. Skills and Competencies
+6. Working Conditions
+7. Benefits (standard UAE education sector)
+8. Application Instructions
+
+Make it:
+- Inclusive and culturally sensitive
+- Aligned with UAE MOE standards
+- Attractive to top talent
+- Clear about expectations
+- Professional and engaging`;
+
+      const response = await invokeTogether({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert HR professional for UAE education sector. Write compelling, inclusive job descriptions that attract qualified candidates.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 2000,
+      });
+
+      const content = response.choices[0]?.message?.content || '';
+
+      await logAIUsage('jobDescriptionGeneration', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
+
+      return typeof content === 'string' ? content : JSON.stringify(content);
+    } catch (error) {
+      console.error('[Together.ai] Job description generation failed:', error);
+      await logAIUsage('jobDescriptionGeneration', 'together', false, Date.now() - startTime);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // HELPER METHODS
+  // ============================================================================
+
+  private normalizeResumeResult(raw: any): ResumeParseResult {
+    // Ensure all required fields exist with defaults
+    return {
+      name: raw.name || raw.personalInfo?.name || 'Unknown',
+      email: raw.email || raw.personalInfo?.email || raw.contact?.email || '',
+      phone: raw.phone || raw.personalInfo?.phone || raw.contact?.phone || '',
+      summary: raw.summary || raw.professionalSummary || '',
+      experience: Array.isArray(raw.experience) ? raw.experience.map((exp: any) => ({
+        title: exp.title || exp.position || '',
+        company: exp.company || exp.organization || '',
+        duration: exp.duration || '',
+        description: exp.description || exp.responsibilities || '',
+        startDate: exp.startDate || exp.start || '',
+        endDate: exp.endDate || exp.end || 'present',
+      })) : [],
+      education: Array.isArray(raw.education) ? raw.education.map((edu: any) => ({
+        degree: edu.degree || edu.qualification || '',
+        institution: edu.institution || edu.school || edu.university || '',
+        year: edu.year || edu.graduationYear || '',
+        gpa: edu.gpa || '',
+      })) : [],
+      skills: Array.isArray(raw.skills) ? raw.skills.map((skill: any) => {
+        if (typeof skill === 'string') {
+          return { name: skill, level: 'intermediate' as const, category: 'General' };
+        }
+        return {
+          name: skill.name || skill.skill || '',
+          level: (skill.level || skill.proficiency || 'intermediate') as any,
+          category: skill.category || 'General',
+        };
+      }) : [],
+      certifications: Array.isArray(raw.certifications) ? raw.certifications.map((cert: any) => ({
+        name: cert.name || cert.certification || '',
+        issuer: cert.issuer || cert.organization || '',
+        date: cert.date || cert.year || '',
+        expiryDate: cert.expiryDate || cert.expiry || '',
+      })) : [],
+      languages: Array.isArray(raw.languages) ? raw.languages.map((lang: any) => {
+        if (typeof lang === 'string') {
+          return { name: lang, proficiency: 'Intermediate' };
+        }
+        return {
+          name: lang.name || lang.language || '',
+          proficiency: lang.proficiency || lang.level || 'Intermediate',
+        };
+      }) : [],
+      totalYearsExperience: raw.totalYearsExperience || raw.yearsOfExperience || 0,
+      suggestedRole: raw.suggestedRole || raw.recommendedRole || '',
+      confidence: raw.confidence || 0.7,
+    };
+  }
+}
+
+// ============================================================================
+// EXPORT SINGLETON
+// ============================================================================
+
+export const togetherAIService = new TogetherAIService();
