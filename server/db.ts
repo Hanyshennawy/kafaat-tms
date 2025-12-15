@@ -462,6 +462,13 @@ export async function getCandidateById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getCandidateSkills(candidateId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(candidateSkills)
+    .where(eq(candidateSkills.candidateId, candidateId));
+}
+
 export async function getCandidateApplications(candidateId: number) {
   const db = await getDb();
   if (!db) return [];
