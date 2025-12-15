@@ -18,7 +18,7 @@ PostgreSQL Version: 16
 ```
 Name: kafaat-tms
 Repository: Hanyshennawy/kafaat-tms
-Branch: main
+Branch: master
 Region: Oregon (US West)
 Root Directory: (leave blank)
 Runtime: Docker
