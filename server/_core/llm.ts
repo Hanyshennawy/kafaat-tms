@@ -67,6 +67,10 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
+  // Temperature control (0.0-1.0): lower = more deterministic, higher = more creative
+  temperature?: number;
+  // Whether to include UAE education knowledge base context
+  includeContext?: boolean;
 };
 
 export type ToolCall = {

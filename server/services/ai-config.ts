@@ -86,7 +86,7 @@ export const AI_FEATURE_CONFIG: Record<string, AIFeatureConfig> = {
   
   jobDescriptionGeneration: {
     provider: 'ollama',
-    fallbackProvider: 'template',
+    fallbackProvider: 'together',
     qualityThreshold: 7,
     costPerRequest: 0,
     avgResponseTime: 3000,
@@ -95,7 +95,7 @@ export const AI_FEATURE_CONFIG: Record<string, AIFeatureConfig> = {
   
   psychometricQuestions: {
     provider: 'ollama',
-    fallbackProvider: 'openai',
+    fallbackProvider: 'together',
     qualityThreshold: 8,
     costPerRequest: 0,
     avgResponseTime: 4000,

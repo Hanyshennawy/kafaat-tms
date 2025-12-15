@@ -522,21 +522,28 @@ export class AIRouterService {
           if (ollamaService.isServiceAvailable()) {
             result = await ollamaService.generatePsychometricQuestions(testType, dimension, count);
           } else {
-            console.warn('[AI Router] Ollama not available for psychometric. Using mock.');
-            result = this.getMockPsychometricQuestions(testType, dimension, count);
+            console.warn('[AI Router] Ollama not available for psychometric. Using Together.ai.');
+            result = await togetherAIService.generatePsychometricQuestions(testType, dimension, count);
           }
           break;
+        case 'together':
+          result = await togetherAIService.generatePsychometricQuestions(testType, dimension, count);
+          break;
         case 'openai':
-          // Implement OpenAI psychometric if available
+          // Fallback to Together.ai if OpenAI not available
           if (process.env.OPENAI_API_KEY) {
-            // Would call openaiService here if implemented
             result = this.getMockPsychometricQuestions(testType, dimension, count);
           } else {
-            result = this.getMockPsychometricQuestions(testType, dimension, count);
+            result = await togetherAIService.generatePsychometricQuestions(testType, dimension, count);
           }
           break;
         default:
-          result = this.getMockPsychometricQuestions(testType, dimension, count);
+          // Try Together.ai first, then mock
+          try {
+            result = await togetherAIService.generatePsychometricQuestions(testType, dimension, count);
+          } catch {
+            result = this.getMockPsychometricQuestions(testType, dimension, count);
+          }
       }
       
       await logAIUsage('psychometricQuestions', provider, true, Date.now() - startTime);

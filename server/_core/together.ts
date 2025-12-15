@@ -5,6 +5,11 @@
  * Using Llama 3.2 3B Instruct Turbo (free tier: 5M tokens/month)
  * 
  * API Docs: https://docs.together.ai/reference/chat-completions
+ * 
+ * CONFIGURATION:
+ * - Temperature: 0.3-0.5 for factual/structured (assessments, skills)
+ * - Temperature: 0.6-0.8 for creative (job descriptions, recommendations)
+ * - Temperature: 0.1-0.2 for deterministic (parsing, extraction)
  */
 
 import { InvokeParams, InvokeResult, Message } from './llm';
@@ -16,7 +21,55 @@ import { InvokeParams, InvokeResult, Message } from './llm';
 const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const TOGETHER_BASE_URL = process.env.TOGETHER_BASE_URL || 'https://api.together.xyz/v1';
 const TOGETHER_MODEL = process.env.TOGETHER_MODEL || 'meta-llama/Llama-3.2-3B-Instruct-Turbo';
-const TOGETHER_TIMEOUT = parseInt(process.env.TOGETHER_TIMEOUT || '30000'); // 30 seconds
+const TOGETHER_TIMEOUT = parseInt(process.env.TOGETHER_TIMEOUT || '60000'); // 60 seconds for complex tasks
+
+// ============================================================================
+// KNOWLEDGE BASE CONTEXT
+// Provides domain-specific knowledge for UAE education sector
+// ============================================================================
+
+const UAE_EDUCATION_CONTEXT = `
+CONTEXT: UAE Ministry of Education (MOE) Talent Management System
+
+KEY FRAMEWORKS:
+1. UAE Teacher Licensing Framework:
+   - Probationary Teacher (0-2 years)
+   - Practicing Teacher (2-4 years)
+   - Advanced Teacher (4-7 years)
+   - Expert Teacher (7+ years)
+   - Lead Teacher / Senior Practitioner
+
+2. UAE Competency Framework for Educators:
+   - Professional Knowledge (Subject, Pedagogy, Curriculum)
+   - Professional Practice (Planning, Teaching, Assessment)
+   - Professional Engagement (Relationships, Development, Ethics)
+
+3. UAE National Standards for Teachers:
+   - Standard 1: Knowledge of Students
+   - Standard 2: Curriculum Knowledge
+   - Standard 3: Instructional Strategies
+   - Standard 4: Learning Environment
+   - Standard 5: Assessment
+   - Standard 6: Professional Learning
+   - Standard 7: Professional Conduct
+
+4. Cultural Considerations:
+   - Respect for UAE values and traditions
+   - Multilingual environment (Arabic, English, others)
+   - Inclusive education practices
+   - Parent and community engagement
+   - Islamic education context where applicable
+
+5. Key Competency Areas:
+   - Classroom Management
+   - Differentiated Instruction
+   - Technology Integration
+   - Student Assessment
+   - Professional Development
+   - Leadership & Mentoring
+   - Special Needs Education
+   - STEAM Education
+`.trim();
 
 // ============================================================================
 // TYPES
@@ -92,8 +145,13 @@ class TogetherClient {
 
   /**
    * Invoke Together.ai chat completion (OpenAI-compatible)
+   * 
+   * Temperature guidelines:
+   * - 0.1-0.3: Parsing, extraction, factual responses
+   * - 0.4-0.6: Structured content (assessments, analysis)
+   * - 0.7-0.9: Creative content (descriptions, recommendations)
    */
-  async invoke(params: InvokeParams): Promise<InvokeResult> {
+  async invoke(params: InvokeParams & { temperature?: number; includeContext?: boolean }): Promise<InvokeResult> {
     if (!this.isAvailable) {
       throw new Error('Together.ai API key not configured. Set TOGETHER_API_KEY in environment.');
     }
@@ -104,14 +162,32 @@ class TogetherClient {
       max_tokens,
       responseFormat,
       response_format,
+      temperature = 0.5,
+      includeContext = true,
     } = params;
 
-    // Build request
+    // Normalize messages and optionally inject UAE education context
+    let normalizedMessages = this.normalizeMessages(messages);
+    
+    // Add knowledge base context to system message if requested
+    if (includeContext) {
+      const systemIdx = normalizedMessages.findIndex(m => m.role === 'system');
+      if (systemIdx >= 0) {
+        normalizedMessages[systemIdx].content = `${UAE_EDUCATION_CONTEXT}\n\n${normalizedMessages[systemIdx].content}`;
+      } else {
+        normalizedMessages.unshift({
+          role: 'system',
+          content: UAE_EDUCATION_CONTEXT,
+        });
+      }
+    }
+
+    // Build request with appropriate temperature
     const request: TogetherChatRequest = {
       model: this.defaultModel,
-      messages: this.normalizeMessages(messages),
+      messages: normalizedMessages,
       max_tokens: maxTokens || max_tokens || 2048,
-      temperature: 0.7,
+      temperature: temperature,
       top_p: 0.9,
     };
 

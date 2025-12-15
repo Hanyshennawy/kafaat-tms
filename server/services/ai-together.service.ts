@@ -60,6 +60,8 @@ Provide structured JSON output.`;
         ],
         response_format: { type: 'json_object' },
         max_tokens: 2000,
+        temperature: 0.2, // Low temperature for accurate extraction
+        includeContext: true,
       });
 
       const content = response.choices[0]?.message?.content || '{}';
@@ -115,6 +117,8 @@ Return as JSON array with ${count} questions.`;
         ],
         response_format: { type: 'json_object' },
         max_tokens: 3000,
+        temperature: 0.7, // Higher for creative question generation
+        includeContext: true,
       });
 
       const content = response.choices[0]?.message?.content || '{}';
@@ -167,6 +171,8 @@ Focus on UAE Ministry of Education competency framework.`;
         ],
         response_format: { type: 'json_object' },
         max_tokens: 2500,
+        temperature: 0.4, // Lower for structured analysis
+        includeContext: true,
       });
 
       const content = response.choices[0]?.message?.content || '{}';
@@ -241,6 +247,8 @@ Return JSON array with ${count} questions, each containing:
         ],
         response_format: { type: 'json_object' },
         max_tokens: 4000,
+        temperature: 0.5, // Balanced for assessment questions
+        includeContext: true,
       });
 
       const content = response.choices[0]?.message?.content || '{}';
@@ -306,6 +314,8 @@ Make it:
           { role: 'user', content: prompt },
         ],
         max_tokens: 2000,
+        temperature: 0.8, // Higher for creative writing
+        includeContext: true,
       });
 
       const content = response.choices[0]?.message?.content || '';
@@ -316,6 +326,106 @@ Make it:
     } catch (error) {
       console.error('[Together.ai] Job description generation failed:', error);
       await logAIUsage('jobDescriptionGeneration', 'together', false, Date.now() - startTime);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate psychometric assessment questions
+   * Uses validated psychological assessment design principles
+   */
+  async generatePsychometricQuestions(
+    testType: string,
+    dimension: string,
+    count: number,
+    tenantId?: number
+  ): Promise<any[]> {
+    const startTime = Date.now();
+    
+    try {
+      const prompt = `Generate ${count} scientifically valid psychometric assessment items.
+
+Test Type: ${testType}
+Dimension to Measure: ${dimension}
+
+IMPORTANT PSYCHOMETRIC DESIGN PRINCIPLES:
+1. Use clear, unambiguous language appropriate for UAE professionals
+2. Avoid double-barreled questions (asking two things at once)
+3. Include a mix of positively and negatively worded items
+4. Avoid extreme language (always, never, completely)
+5. Questions should have cultural sensitivity for UAE context
+6. Balance social desirability bias with reverse-scored items
+
+TEST TYPE SPECIFIC GUIDELINES:
+${testType === 'big5' ? `
+- Measure Big Five personality traits: Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism
+- Use behavioral statements rather than self-labels
+- Example: "I enjoy meeting new people" (Extraversion) not "I am extroverted"
+` : testType === 'leadership' ? `
+- Measure leadership competencies: Vision, Decision-making, Team building, Communication, Emotional intelligence
+- Use situational and behavioral statements
+- Focus on UAE educational leadership context
+` : testType === 'cognitive' ? `
+- Assess cognitive abilities: Analytical thinking, Problem-solving, Pattern recognition, Memory, Adaptability
+- Use scenario-based questions
+- Appropriate for education sector professionals
+` : testType === 'emotional_intelligence' ? `
+- Measure EQ dimensions: Self-awareness, Self-regulation, Motivation, Empathy, Social skills
+- Use workplace scenarios relevant to schools
+- Focus on teacher-student and colleague interactions
+` : `
+- Measure relevant professional competencies
+- Use behavioral indicators
+- Align with UAE MOE standards
+`}
+
+For each question, provide JSON with:
+- question: The assessment item text
+- dimension: "${dimension}" or relevant sub-dimension
+- type: "likert" (5-point scale), "forced-choice" (A/B choice), or "situational" (scenario-based)
+- options: Array of response options or scale labels
+- scoring: "normal" (higher = more of trait) or "reverse" (lower = more of trait)
+- weight: Importance weight (0.5 to 1.5, default 1.0)
+- rationale: Brief explanation of what this item measures
+
+Return as JSON object with "questions" array containing exactly ${count} items.`;
+
+      const response = await invokeTogether({
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert psychometrician with deep knowledge of psychological assessment design. 
+You specialize in creating valid, reliable assessment instruments for organizational psychology in the UAE education sector.
+Your items should follow APA guidelines for psychological testing and be culturally appropriate for the UAE context.
+Always respond with properly structured JSON.`,
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 4000,
+        temperature: 0.5, // Balanced for assessment items
+        includeContext: true,
+      });
+
+      const content = response.choices[0]?.message?.content || '{}';
+      const result = JSON.parse(content as string);
+
+      await logAIUsage('psychometricQuestions', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
+
+      // Normalize the response
+      const questions = result.questions || result.items || [];
+      return questions.map((q: any, idx: number) => ({
+        question: q.question || q.text || q.item || '',
+        dimension: q.dimension || dimension,
+        type: q.type || 'likert',
+        options: q.options || ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
+        scoring: q.scoring || (idx % 3 === 2 ? 'reverse' : 'normal'),
+        weight: q.weight || 1.0,
+        rationale: q.rationale || '',
+      }));
+    } catch (error) {
+      console.error('[Together.ai] Psychometric question generation failed:', error);
+      await logAIUsage('psychometricQuestions', 'together', false, Date.now() - startTime);
       throw error;
     }
   }
