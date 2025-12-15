@@ -1012,6 +1012,78 @@ export const psychometricResults = pgTable("psychometric_results", {
 });
 
 // ============================================================================
+// GAMIFICATION & ENGAGEMENT SYSTEM
+// ============================================================================
+
+export const gamificationBadgeCategoryEnum = pgEnum("gamification_badge_category", ["learning", "engagement", "performance", "leadership", "special"]);
+export const gamificationBadgeRarityEnum = pgEnum("gamification_badge_rarity", ["common", "rare", "epic", "legendary"]);
+export const gamificationPointTypeEnum = pgEnum("gamification_point_type", ["earned", "spent", "bonus", "penalty"]);
+
+export const gamificationBadges = pgTable("gamification_badges", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  icon: varchar("icon", { length: 20 }),
+  category: gamificationBadgeCategoryEnum("category").default("engagement").notNull(),
+  points: integer("points").default(0).notNull(),
+  criteriaType: varchar("criteriaType", { length: 50 }).notNull(), // count, streak, score, completion
+  criteriaMetric: varchar("criteriaMetric", { length: 100 }).notNull(),
+  criteriaThreshold: integer("criteriaThreshold").default(1).notNull(),
+  criteriaTimeframe: varchar("criteriaTimeframe", { length: 20 }), // day, week, month, year, all_time
+  rarity: gamificationBadgeRarityEnum("rarity").default("common").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const gamificationUserBadges = pgTable("gamification_user_badges", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  badgeId: integer("badgeId").notNull(),
+  earnedAt: timestamp("earnedAt").defaultNow().notNull(),
+  progress: integer("progress").default(0),
+});
+
+export const gamificationPoints = pgTable("gamification_points", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  points: integer("points").notNull(),
+  type: gamificationPointTypeEnum("type").default("earned").notNull(),
+  reason: text("reason"),
+  category: varchar("category", { length: 50 }),
+  referenceType: varchar("referenceType", { length: 50 }), // course, survey, goal, etc.
+  referenceId: integer("referenceId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const gamificationLeaderboard = pgTable("gamification_leaderboard", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  totalPoints: integer("totalPoints").default(0).notNull(),
+  badgeCount: integer("badgeCount").default(0).notNull(),
+  level: integer("level").default(1).notNull(),
+  streak: integer("streak").default(0).notNull(),
+  lastActivityAt: timestamp("lastActivityAt"),
+  timeframe: varchar("timeframe", { length: 20 }).default("all_time").notNull(), // week, month, year, all_time
+  rank: integer("rank"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export const gamificationUserStats = pgTable("gamification_user_stats", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull().unique(),
+  totalPoints: integer("totalPoints").default(0).notNull(),
+  level: integer("level").default(1).notNull(),
+  currentStreak: integer("currentStreak").default(0).notNull(),
+  longestStreak: integer("longestStreak").default(0).notNull(),
+  coursesCompleted: integer("coursesCompleted").default(0).notNull(),
+  surveysCompleted: integer("surveysCompleted").default(0).notNull(),
+  goalsAchieved: integer("goalsAchieved").default(0).notNull(),
+  lastActivityDate: timestamp("lastActivityDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
@@ -1089,3 +1161,10 @@ export type PsychometricOption = typeof psychometricOptions.$inferSelect;
 export type PsychometricAssessment = typeof psychometricAssessments.$inferSelect;
 export type PsychometricResponse = typeof psychometricResponses.$inferSelect;
 export type PsychometricResult = typeof psychometricResults.$inferSelect;
+
+// Gamification
+export type GamificationBadge = typeof gamificationBadges.$inferSelect;
+export type GamificationUserBadge = typeof gamificationUserBadges.$inferSelect;
+export type GamificationPoints = typeof gamificationPoints.$inferSelect;
+export type GamificationLeaderboard = typeof gamificationLeaderboard.$inferSelect;
+export type GamificationUserStats = typeof gamificationUserStats.$inferSelect;
