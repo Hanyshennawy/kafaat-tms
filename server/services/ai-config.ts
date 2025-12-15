@@ -203,13 +203,22 @@ export function isProviderAvailable(provider: AIProvider): boolean {
 export function getEffectiveProvider(feature: string): AIProvider {
   // If AI_PROVIDER environment variable is set, use it
   if (DEFAULT_PROVIDER && isProviderAvailable(DEFAULT_PROVIDER)) {
+    console.log(`[AI Config] Using AI_PROVIDER override: '${DEFAULT_PROVIDER}' for '${feature}'`);
     return DEFAULT_PROVIDER;
   }
   
   const config = getAIConfig(feature);
   
-  // For Ollama, we do a sync check (real availability verified at call time)
+  // For Ollama, check if we're in production (Render) - Ollama won't be available
   if (config.provider === 'ollama') {
+    // In production (Render), skip Ollama and use fallback
+    if (process.env.NODE_ENV === 'production' || process.env.RENDER === 'true') {
+      if (config.fallbackProvider && isProviderAvailable(config.fallbackProvider)) {
+        console.log(`[AI Config] Production mode: Using '${config.fallbackProvider}' for '${feature}' (Ollama not available in cloud)`);
+        return config.fallbackProvider;
+      }
+    }
+    
     // Check if Ollama URL is configured or we're using default localhost
     const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
     console.log(`[AI Config] Using Ollama for '${feature}' at ${ollamaUrl}`);
