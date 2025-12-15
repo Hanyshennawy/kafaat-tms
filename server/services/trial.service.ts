@@ -9,9 +9,10 @@
 
 import { eq, lt, and, isNotNull } from "drizzle-orm";
 import { getDb } from "../db";
-import { tenants, type Tenant } from "../../drizzle/tenant-schema";
+import { tenants, type Tenant } from "../../drizzle/schema-pg";
 import { emailService } from "./email.service";
 import { tenantService } from "./tenant.service";
+
 
 // ============================================================================
 // CONFIGURATION

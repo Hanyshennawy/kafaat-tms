@@ -20,7 +20,7 @@ import { Express, Request, Response } from "express";
 import axios from "axios";
 import { tenantService } from "../services/tenant.service";
 import { getDb } from "../db";
-import { usageMetering } from "../../drizzle/tenant-schema";
+import { usageMetering } from "../../drizzle/schema-pg";
 import { eq, and } from "drizzle-orm";
 
 // Azure Marketplace API endpoints

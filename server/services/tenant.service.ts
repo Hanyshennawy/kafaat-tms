@@ -11,7 +11,7 @@ import {
   type InsertTenant,
   type TenantSubscription,
   type InsertTenantSubscription,
-} from "../../drizzle/tenant-schema";
+} from "../../drizzle/schema-pg";
 import { nanoid } from "nanoid";
 
 /**

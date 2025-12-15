@@ -25,7 +25,7 @@ import {
   dataRetentionPolicies,
   dataSubjectRequests,
   tenantAuditLogs,
-} from "../../drizzle/tenant-schema";
+} from "../../drizzle/schema-pg";
 import { eq, and, lte, desc } from "drizzle-orm";
 import { tenantService } from "../services/tenant.service";
 

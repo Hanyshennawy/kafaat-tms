@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { saasApplications } from "../../drizzle/tenant-schema";
+import { saasApplications } from "../../drizzle/schema-pg";
 import { eq, desc } from "drizzle-orm";
 import { tenantService } from "../services/tenant.service";
 
