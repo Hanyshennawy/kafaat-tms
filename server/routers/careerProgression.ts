@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import * as schema from "../../drizzle/schema";
+import * as schema from "../../drizzle/schema-pg";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export const careerProgressionRouter = router({

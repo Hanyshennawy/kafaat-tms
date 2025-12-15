@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { togetherClient, invokeTogether } from "./together";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -212,11 +213,14 @@ const normalizeToolChoice = (
 const resolveApiUrl = () =>
   ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+    : "https://api.together.xyz/v1/chat/completions";
+
+const isTogetherAvailable = () => !!process.env.TOGETHER_API_KEY;
+const isForgeAvailable = () => !!ENV.forgeApiKey;
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!ENV.forgeApiKey && !process.env.TOGETHER_API_KEY) {
+    throw new Error("Either BUILT_IN_FORGE_API_KEY or TOGETHER_API_KEY must be configured");
   }
 };
 
@@ -268,6 +272,12 @@ const normalizeResponseFormat = ({
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
+  // If Forge API is not available but Together.ai is, use Together.ai
+  if (!isForgeAvailable() && isTogetherAvailable()) {
+    console.log("[LLM] Using Together.ai as primary AI provider");
+    return invokeTogether(params);
+  }
+
   const {
     messages,
     tools,
@@ -279,8 +289,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     response_format,
   } = params;
 
+  // Use Together.ai model if Forge API key looks like a Together.ai key or is not set
+  const model = process.env.TOGETHER_API_KEY && !ENV.forgeApiKey 
+    ? (process.env.TOGETHER_MODEL || "meta-llama/Llama-3.2-3B-Instruct-Turbo")
+    : "gemini-2.5-flash";
+  
+  const apiKey = ENV.forgeApiKey || process.env.TOGETHER_API_KEY;
+  const apiUrl = ENV.forgeApiKey 
+    ? resolveApiUrl()
+    : "https://api.together.xyz/v1/chat/completions";
+
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model,
     messages: messages.map(normalizeMessage),
   };
 
@@ -296,9 +316,14 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
+  // Only add thinking for Forge API
+  if (ENV.forgeApiKey) {
+    payload.max_tokens = 32768;
+    payload.thinking = {
+      "budget_tokens": 128
+    };
+  } else {
+    payload.max_tokens = 2048;
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
@@ -312,11 +337,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
+  const response = await fetch(apiUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(payload),
   });

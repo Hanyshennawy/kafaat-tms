@@ -12,7 +12,7 @@ import {
   staffPlacements,
   placementRequests,
   placementApprovals,
-} from "../../drizzle/schema";
+} from "../../drizzle/schema-pg";
 
 export const placementRouter = router({
   // ============================================================================

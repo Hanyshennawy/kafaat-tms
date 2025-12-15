@@ -324,7 +324,8 @@ export async function setRetentionPolicy(data: {
       autoDelete: data.autoDelete,
       archiveBeforeDelete: data.archiveBeforeDelete,
     })
-    .onDuplicateKeyUpdate({
+    .onConflictDoUpdate({
+      target: [dataRetentionPolicies.tenantId, dataRetentionPolicies.dataCategory],
       set: {
         retentionDays: data.retentionDays,
         autoDelete: data.autoDelete,

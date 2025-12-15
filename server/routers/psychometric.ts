@@ -15,7 +15,7 @@ import {
   psychometricAssessments,
   psychometricResponses,
   psychometricResults,
-} from "../../drizzle/schema";
+} from "../../drizzle/schema-pg";
 
 export const psychometricRouter = router({
   // ============================================================================

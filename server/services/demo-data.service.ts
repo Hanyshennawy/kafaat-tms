@@ -15,7 +15,7 @@ import {
   successionPlans,
   surveys,
   skills,
-} from "../../drizzle/schema";
+} from "../../drizzle/schema-pg";
 
 // ============================================================================
 // DEMO DATA TEMPLATES

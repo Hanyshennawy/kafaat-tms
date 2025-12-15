@@ -16,7 +16,7 @@ import {
   assessmentRubrics,
   assessmentEvidence,
   competencyDevelopmentPlans,
-} from "../../drizzle/schema";
+} from "../../drizzle/schema-pg";
 
 export const competencyRouter = router({
   // ============================================================================

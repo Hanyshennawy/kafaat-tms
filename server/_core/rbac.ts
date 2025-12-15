@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import type { User } from "../../drizzle/schema";
+import type { User } from "../../drizzle/schema-pg";
 
 /**
  * Role-Based Access Control (RBAC) System

@@ -55,7 +55,7 @@ import {
   auditLogs,
   reports,
   roleSkills,
-} from "../drizzle/schema";
+} from "../drizzle/schema-pg";
 import { ENV } from './_core/env';
 import * as demoData from './demo-data';
 
@@ -144,7 +144,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
       set: updateSet,
     });
   } catch (error) {

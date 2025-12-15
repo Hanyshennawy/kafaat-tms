@@ -24,7 +24,7 @@ import {
   performanceCycles, goals, goalProgress, selfAppraisals, managerReviews, feedback360, performanceRatings,
   licenseTypes, licenseTiers, licenseApplications, applicationDocuments, licenses, licenseHistory, cpdRecords, assessmentResults,
   notifications, ratings, auditLogs, reports, departments, positions
-} from "../drizzle/schema";
+} from "../drizzle/schema-pg";
 import { eq, desc } from "drizzle-orm";
 
 // ============================================================================
