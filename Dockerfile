@@ -23,9 +23,10 @@ FROM node:22-alpine AS production
 
 WORKDIR /app
 
-# Install only production dependencies
+# Install only production dependencies PLUS vite (needed at runtime for server)
 COPY package*.json ./
-RUN npm ci --only=production --legacy-peer-deps
+RUN npm ci --only=production --legacy-peer-deps && \
+    npm install vite --legacy-peer-deps
 
 # Copy built assets from builder
 COPY --from=builder /app/dist ./dist
