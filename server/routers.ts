@@ -1152,6 +1152,55 @@ const teachersLicensingRouter = router({
       return await db.getLicenseTiers(input.licenseTypeId);
     }),
   
+  // Get current user's licenses
+  getMyLicenses: protectedProcedure.query(async ({ ctx }) => {
+    return await db.getUserLicenses(ctx.user.id);
+  }),
+  
+  // Get current user's applications
+  getMyApplications: protectedProcedure.query(async ({ ctx }) => {
+    return await db.getUserApplications(ctx.user.id);
+  }),
+  
+  // Get current user's CPD records
+  getMyCpdRecords: protectedProcedure.query(async ({ ctx }) => {
+    return await db.getUserCpdRecords(ctx.user.id);
+  }),
+  
+  // Get dashboard statistics for current user
+  getDashboardStats: protectedProcedure.query(async ({ ctx }) => {
+    return await db.getLicensingDashboardStats(ctx.user.id);
+  }),
+  
+  // Get required courses for a license type with user progress
+  getCoursesForLicense: protectedProcedure
+    .input(z.object({ licenseTypeId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      return await db.getCoursesWithProgress(ctx.user.id, input.licenseTypeId);
+    }),
+  
+  // Check eligibility for a license type
+  checkEligibility: protectedProcedure
+    .input(z.object({
+      licenseTypeId: z.number(),
+      qualification: z.string(),
+      yearsExperience: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      // Get license type requirements
+      const licenseType = await db.getLicenseTypeById(input.licenseTypeId);
+      if (!licenseType) throw new Error("License type not found");
+      
+      // Simple eligibility check - can be made more sophisticated
+      const isEligible = input.yearsExperience >= 2 && input.qualification !== '';
+      
+      return {
+        eligible: isEligible,
+        requirements: licenseType.requirements || '',
+        missingRequirements: isEligible ? [] : ['Additional qualifications may be needed'],
+      };
+    }),
+
   getAllApplications: protectedProcedure.query(async () => {
     return await db.getAllLicenseApplications();
   }),

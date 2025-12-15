@@ -8,11 +8,12 @@ import {
   GraduationCap, FileText, RefreshCw, Award, ArrowRight, 
   Shield, CheckCircle2, Clock, AlertCircle, Plus, ChevronRight,
   BookOpen, ClipboardCheck, Upload, Star, TrendingUp, Users,
-  Calendar, Bell, ExternalLink, Sparkles, Play
+  Calendar, Bell, ExternalLink, Sparkles, Play, Loader2
 } from "lucide-react";
 import { Link } from "wouter";
+import { trpc } from "@/lib/trpc";
 
-// Service types available
+// Service types available (static config - could also be from DB in future)
 const licenseServices = [
   {
     id: "new-license",
@@ -68,56 +69,43 @@ const licenseServices = [
   }
 ];
 
-// Demo user license data
-const userLicenses = [
-  {
-    id: "LIC-2024-001",
-    type: "Teaching License",
-    category: "Secondary Education",
-    subject: "Mathematics",
-    status: "active",
-    issueDate: "2023-03-15",
-    expiryDate: "2026-03-14",
-    blockchainVerified: true,
-    autoRenewalEnabled: true,
-    cpdProgress: 85,
-    daysToExpiry: 456
-  }
-];
-
-// Demo active applications
-const activeApplications = [
-  {
-    id: "APP-2024-123",
-    type: "License Upgrade",
-    status: "in_progress",
-    currentStep: 2,
-    totalSteps: 4,
-    stepName: "Additional Training",
-    submittedDate: "2024-12-01",
-    lastUpdated: "2024-12-10"
-  }
-];
-
-// Notifications
-const notifications = [
-  { id: 1, type: "warning", message: "CPD hours requirement: 15 hours remaining before renewal", date: "2024-12-13" },
-  { id: 2, type: "info", message: "New training course available: Digital Assessment Methods", date: "2024-12-10" },
-  { id: 3, type: "success", message: "Your license has been auto-verified for renewal eligibility", date: "2024-12-05" }
-];
-
 export default function LicensingDashboard() {
   const [activeTab, setActiveTab] = useState("services");
+
+  // Fetch data from database via tRPC
+  const { data: dashboardStats, isLoading: statsLoading } = trpc.teachersLicensing.getDashboardStats.useQuery();
+  const { data: myLicenses = [], isLoading: licensesLoading } = trpc.teachersLicensing.getMyLicenses.useQuery();
+  const { data: myApplications = [], isLoading: appsLoading } = trpc.teachersLicensing.getMyApplications.useQuery();
+  const { data: myCpdRecords = [] } = trpc.teachersLicensing.getMyCpdRecords.useQuery();
+  const { data: notifications = [] } = trpc.notifications.getMyNotifications.useQuery();
+
+  const isLoading = statsLoading || licensesLoading || appsLoading;
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active": return "bg-green-100 text-green-700";
       case "expiring_soon": return "bg-yellow-100 text-yellow-700";
       case "expired": return "bg-red-100 text-red-700";
-      case "in_progress": return "bg-blue-100 text-blue-700";
+      case "in_progress": case "submitted": case "under_review": return "bg-blue-100 text-blue-700";
       default: return "bg-gray-100 text-gray-700";
     }
   };
+  
+  // Calculate CPD progress percentage
+  const cpdProgress = dashboardStats 
+    ? Math.min(100, Math.round((dashboardStats.cpdHoursCompleted / dashboardStats.cpdHoursRequired) * 100))
+    : 0;
+
+  if (isLoading) {
+    return (
+      <div className="container py-8 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container py-8">
@@ -155,7 +143,7 @@ export default function LicensingDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Licenses</p>
-                <p className="text-2xl font-bold text-green-600">{userLicenses.filter(l => l.status === "active").length}</p>
+                <p className="text-2xl font-bold text-green-600">{dashboardStats?.activeLicenses ?? 0}</p>
               </div>
               <div className="p-3 rounded-full bg-green-100">
                 <Award className="h-6 w-6 text-green-600" />
@@ -168,7 +156,7 @@ export default function LicensingDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Pending Applications</p>
-                <p className="text-2xl font-bold text-blue-600">{activeApplications.length}</p>
+                <p className="text-2xl font-bold text-blue-600">{dashboardStats?.pendingApplications ?? 0}</p>
               </div>
               <div className="p-3 rounded-full bg-blue-100">
                 <Clock className="h-6 w-6 text-blue-600" />
@@ -181,7 +169,7 @@ export default function LicensingDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">CPD Progress</p>
-                <p className="text-2xl font-bold text-purple-600">85%</p>
+                <p className="text-2xl font-bold text-purple-600">{cpdProgress}%</p>
               </div>
               <div className="p-3 rounded-full bg-purple-100">
                 <BookOpen className="h-6 w-6 text-purple-600" />
@@ -194,7 +182,7 @@ export default function LicensingDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Days to Renewal</p>
-                <p className="text-2xl font-bold text-teal-600">456</p>
+                <p className="text-2xl font-bold text-teal-600">{dashboardStats?.daysToRenewal ?? 'N/A'}</p>
               </div>
               <div className="p-3 rounded-full bg-teal-100">
                 <Calendar className="h-6 w-6 text-teal-600" />
@@ -213,12 +201,12 @@ export default function LicensingDashboard() {
               <div className="flex-1">
                 <p className="font-medium text-yellow-800">Important Notifications</p>
                 <ul className="mt-2 space-y-1">
-                  {notifications.slice(0, 2).map(n => (
+                  {notifications.slice(0, 2).map((n: any) => (
                     <li key={n.id} className="text-sm text-yellow-700 flex items-center gap-2">
-                      {n.type === "warning" && <AlertCircle className="h-3 w-3" />}
-                      {n.type === "info" && <Bell className="h-3 w-3" />}
-                      {n.type === "success" && <CheckCircle2 className="h-3 w-3" />}
-                      {n.message}
+                      {n.priority === "high" && <AlertCircle className="h-3 w-3" />}
+                      {n.priority === "medium" && <Bell className="h-3 w-3" />}
+                      {n.priority === "low" && <CheckCircle2 className="h-3 w-3" />}
+                      {n.message || n.title}
                     </li>
                   ))}
                 </ul>
@@ -344,94 +332,99 @@ export default function LicensingDashboard() {
 
         {/* My Licenses Tab */}
         <TabsContent value="my-licenses" className="space-y-6">
-          {userLicenses.length > 0 ? (
-            userLicenses.map(license => (
-              <Card key={license.id} className="overflow-hidden">
-                <div className="flex">
-                  {/* License Card Visual */}
-                  <div className="w-64 bg-gradient-to-br from-teal-600 to-blue-600 p-6 text-white flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <GraduationCap className="h-8 w-8" />
-                        <span className="font-bold">UAE MOE</span>
+          {myLicenses.length > 0 ? (
+            myLicenses.map((license: any) => {
+              // Calculate days to expiry
+              const expiryDate = new Date(license.expiryDate);
+              const today = new Date();
+              const daysToExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              
+              return (
+                <Card key={license.id} className="overflow-hidden">
+                  <div className="flex">
+                    {/* License Card Visual */}
+                    <div className="w-64 bg-gradient-to-br from-teal-600 to-blue-600 p-6 text-white flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <GraduationCap className="h-8 w-8" />
+                          <span className="font-bold">UAE MOE</span>
+                        </div>
+                        <p className="text-sm opacity-80">Teaching License</p>
+                        <p className="text-xl font-bold mt-1">{license.licenseNumber}</p>
                       </div>
-                      <p className="text-sm opacity-80">Teaching License</p>
-                      <p className="text-xl font-bold mt-1">{license.id}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs opacity-70">Valid Until</p>
-                      <p className="font-semibold">{new Date(license.expiryDate).toLocaleDateString()}</p>
-                    </div>
-                    {license.blockchainVerified && (
+                      <div>
+                        <p className="text-xs opacity-70">Valid Until</p>
+                        <p className="font-semibold">{expiryDate.toLocaleDateString()}</p>
+                      </div>
                       <div className="flex items-center gap-1 mt-2 text-xs">
                         <Shield className="h-3 w-3" />
-                        <span>Blockchain Verified</span>
+                        <span>Verified</span>
                       </div>
-                    )}
-                  </div>
-                  
-                  {/* License Details */}
-                  <div className="flex-1 p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold">{license.type}</h3>
-                        <p className="text-muted-foreground">{license.category} - {license.subject}</p>
-                      </div>
-                      <Badge className={getStatusColor(license.status)}>
-                        {license.status === "active" && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                        {license.status.replace("_", " ").toUpperCase()}
-                      </Badge>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-6 mb-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Issue Date</p>
-                        <p className="font-medium">{new Date(license.issueDate).toLocaleDateString()}</p>
+                    {/* License Details */}
+                    <div className="flex-1 p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-xl font-bold">Teaching License</h3>
+                          <p className="text-muted-foreground">{license.specialization || 'General'}</p>
+                        </div>
+                        <Badge className={getStatusColor(license.status)}>
+                          {license.status === "active" && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                          {(license.status || 'active').replace("_", " ").toUpperCase()}
+                        </Badge>
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Expiry Date</p>
-                        <p className="font-medium">{new Date(license.expiryDate).toLocaleDateString()}</p>
+                      
+                      <div className="grid grid-cols-3 gap-6 mb-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Issue Date</p>
+                          <p className="font-medium">{new Date(license.issueDate).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Expiry Date</p>
+                          <p className="font-medium">{expiryDate.toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Days Remaining</p>
+                          <p className={`font-medium ${daysToExpiry > 90 ? 'text-green-600' : daysToExpiry > 30 ? 'text-yellow-600' : 'text-red-600'}`}>
+                            {daysToExpiry > 0 ? `${daysToExpiry} days` : 'Expired'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Days Remaining</p>
-                        <p className="font-medium text-green-600">{license.daysToExpiry} days</p>
-                      </div>
-                    </div>
 
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span>CPD Progress for Renewal</span>
-                        <span className="font-medium">{license.cpdProgress}%</span>
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span>CPD Progress for Renewal</span>
+                          <span className="font-medium">{cpdProgress}%</span>
+                        </div>
+                        <Progress value={cpdProgress} className="h-2" />
                       </div>
-                      <Progress value={license.cpdProgress} className="h-2" />
-                    </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {license.autoRenewalEnabled && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
                           <Badge variant="secondary" className="gap-1">
                             <RefreshCw className="h-3 w-3" />
-                            Auto-Renewal Enabled
+                            Auto-Renewal Available
                           </Badge>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="gap-1">
-                          <ExternalLink className="h-4 w-4" />
-                          Download
-                        </Button>
-                        <Link href={`/licensing/license/${license.id}`}>
-                          <Button size="sm" className="gap-1">
-                            View Details
-                            <ChevronRight className="h-4 w-4" />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="gap-1">
+                            <ExternalLink className="h-4 w-4" />
+                            Download
                           </Button>
-                        </Link>
+                          <Link href={`/licensing/license/${license.id}`}>
+                            <Button size="sm" className="gap-1">
+                              View Details
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            ))
+                </Card>
+              );
+            })
           ) : (
             <Card>
               <CardContent className="py-12 text-center">
@@ -451,20 +444,20 @@ export default function LicensingDashboard() {
 
         {/* Applications Tab */}
         <TabsContent value="applications" className="space-y-6">
-          {activeApplications.length > 0 ? (
-            activeApplications.map(app => (
+          {myApplications.length > 0 ? (
+            myApplications.map((app: any) => (
               <Card key={app.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
                       <CardTitle className="flex items-center gap-2">
-                        {app.type}
+                        License Application
                         <Badge className={getStatusColor(app.status)}>
-                          {app.status.replace("_", " ")}
+                          {(app.status || 'draft').replace("_", " ")}
                         </Badge>
                       </CardTitle>
                       <CardDescription>
-                        Application ID: {app.id} • Submitted: {new Date(app.submittedDate).toLocaleDateString()}
+                        Application #{app.applicationNumber || app.id} • Created: {new Date(app.createdAt).toLocaleDateString()}
                       </CardDescription>
                     </div>
                   </div>
@@ -472,18 +465,28 @@ export default function LicensingDashboard() {
                 <CardContent>
                   <div className="mb-4">
                     <div className="flex items-center justify-between text-sm mb-2">
-                      <span>Progress: Step {app.currentStep} of {app.totalSteps}</span>
-                      <span className="font-medium">{app.stepName}</span>
+                      <span>Status: {(app.status || 'draft').replace("_", " ")}</span>
+                      <span className="font-medium">
+                        {app.status === 'approved' ? 'Complete' : app.status === 'rejected' ? 'Rejected' : 'In Progress'}
+                      </span>
                     </div>
-                    <Progress value={(app.currentStep / app.totalSteps) * 100} className="h-3" />
+                    <Progress 
+                      value={
+                        app.status === 'approved' ? 100 : 
+                        app.status === 'under_review' ? 75 : 
+                        app.status === 'submitted' ? 50 : 
+                        app.status === 'documents_pending' ? 60 : 25
+                      } 
+                      className="h-3" 
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
-                      Last updated: {new Date(app.lastUpdated).toLocaleDateString()}
+                      {app.submittedAt ? `Submitted: ${new Date(app.submittedAt).toLocaleDateString()}` : 'Not yet submitted'}
                     </p>
                     <Link href={`/licensing/application/${app.id}`}>
                       <Button className="gap-2">
-                        Continue Application
+                        {app.status === 'draft' ? 'Continue Application' : 'View Details'}
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </Link>
@@ -505,7 +508,7 @@ export default function LicensingDashboard() {
           )}
         </TabsContent>
 
-        {/* CPD Tab - Link to existing */}
+        {/* CPD Tab */}
         <TabsContent value="cpd" className="space-y-6">
           <Card>
             <CardHeader>
@@ -520,11 +523,35 @@ export default function LicensingDashboard() {
             <CardContent>
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Annual Progress: 47/60 hours</span>
-                  <span className="text-muted-foreground">78% complete</span>
+                  <span className="font-medium">
+                    Annual Progress: {dashboardStats?.cpdHoursCompleted ?? 0}/{dashboardStats?.cpdHoursRequired ?? 100} hours
+                  </span>
+                  <span className="text-muted-foreground">{cpdProgress}% complete</span>
                 </div>
-                <Progress value={78} className="h-3" />
+                <Progress value={cpdProgress} className="h-3" />
               </div>
+              
+              {/* CPD Records List */}
+              {myCpdRecords.length > 0 && (
+                <div className="space-y-3 mb-6">
+                  <h4 className="font-medium text-sm">Recent CPD Activities</h4>
+                  {myCpdRecords.slice(0, 5).map((record: any) => (
+                    <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">{record.activityName}</p>
+                        <p className="text-sm text-muted-foreground">{record.provider || 'Self-study'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{record.hours} hours</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(record.completedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
               <Link href="/licensing/cpd">
                 <Button className="w-full gap-2">
                   <ExternalLink className="h-4 w-4" />

@@ -78,6 +78,7 @@ export const scoringMethodEnum = pgEnum("scoring_method", ["likert_scale", "mult
 export const testStatusEnum = pgEnum("test_status", ["active", "inactive", "draft"]);
 export const psychQuestionTypeEnum = pgEnum("psych_question_type", ["likert", "multiple_choice", "true_false", "rating"]);
 export const psychAssessmentStatusEnum = pgEnum("psych_assessment_status", ["in_progress", "completed", "abandoned"]);
+export const courseProgressStatusEnum = pgEnum("course_progress_status", ["not_started", "in_progress", "completed"]);
 export const badgeTierEnum = pgEnum("badge_tier", ["bronze", "silver", "gold", "platinum"]);
 export const verificationStatusLogEnum = pgEnum("verification_status_log", ["valid", "invalid", "expired", "revoked"]);
 export const integrationStatusEnum = pgEnum("integration_status", ["success", "failed", "pending"]);
@@ -715,6 +716,37 @@ export const assessmentResults = pgTable("assessment_results", {
   results: json("results"),
 });
 
+// Licensing Required Courses - courses required for each license type
+export const licensingCourses = pgTable("licensing_courses", {
+  id: serial("id").primaryKey(),
+  licenseTypeId: integer("licenseTypeId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  duration: varchar("duration", { length: 100 }), // e.g., "4 hours", "2 days"
+  orderIndex: integer("orderIndex").default(0).notNull(),
+  isRequired: boolean("isRequired").default(true).notNull(),
+  passingScore: integer("passingScore").default(70).notNull(),
+  contentUrl: text("contentUrl"),
+  status: licenseStatusEnum("status").default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+// User Course Progress - tracks user's progress in licensing courses
+export const userCourseProgress = pgTable("user_course_progress", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  courseId: integer("courseId").notNull(),
+  applicationId: integer("applicationId"), // links to specific license application
+  status: courseProgressStatusEnum("status").default("not_started").notNull(),
+  progress: integer("progress").default(0).notNull(), // 0-100 percentage
+  score: integer("score"), // final score if completed
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
 // ============================================================================
 // CROSS-CUTTING: NOTIFICATIONS, RATINGS, AUDIT LOGS
 // ============================================================================
@@ -1135,6 +1167,8 @@ export type License = typeof licenses.$inferSelect;
 export type LicenseHistory = typeof licenseHistory.$inferSelect;
 export type CpdRecord = typeof cpdRecords.$inferSelect;
 export type AssessmentResult = typeof assessmentResults.$inferSelect;
+export type LicensingCourse = typeof licensingCourses.$inferSelect;
+export type UserCourseProgress = typeof userCourseProgress.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type Rating = typeof ratings.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;

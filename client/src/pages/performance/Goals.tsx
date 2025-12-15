@@ -133,11 +133,18 @@ export default function Goals() {
       toast.error("Please enter a goal title");
       return;
     }
+    const goalTypeMap: Record<string, "individual" | "team" | "departmental" | "organizational"> = {
+      "individual": "individual",
+      "team": "team",
+      "department": "departmental",
+      "departmental": "departmental",
+      "organizational": "organizational"
+    };
     createGoal.mutate({ 
       employeeId: 1, 
       cycleId: 1, 
       title: newGoal.title, 
-      goalType: newGoal.goalType as "individual" | "team" | "department", 
+      goalType: goalTypeMap[newGoal.goalType] || "individual", 
       description: newGoal.description, 
       deadline: newGoal.targetDate ? new Date(newGoal.targetDate) : undefined 
     });

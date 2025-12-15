@@ -376,7 +376,14 @@ export const aiInterviewRouter = router({
     .mutation(async ({ input }) => {
       const newTemplate = {
         id: DEMO_TEMPLATES.length + 1,
-        ...input,
+        name: input.name,
+        description: input.description || "",
+        positionType: input.positionType,
+        subjectArea: input.subjectArea || null,
+        duration: input.duration,
+        totalQuestions: input.totalQuestions,
+        passingScore: input.passingScore,
+        competencies: input.competencies,
         status: "draft" as const,
         createdBy: 1,
         createdAt: new Date(),

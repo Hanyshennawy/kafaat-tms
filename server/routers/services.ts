@@ -335,9 +335,6 @@ export const servicesRouter = router({
       }),
     
     /**
-     * Generate job description
-     */
-    /**
      * Generate job description (Now uses Together.ai via router)
      */
     generateJobDescription: protectedProcedure
@@ -355,6 +352,55 @@ export const servicesRouter = router({
           input.responsibilities,
           ctx.tenantId
         );
+      }),
+    
+    /**
+     * Generate AI-powered psychometric assessment questions
+     * Uses Together.ai for intelligent, scientifically valid assessment items
+     */
+    generatePsychometricQuestions: protectedProcedure
+      .input(z.object({
+        testType: z.enum(["personality", "eq", "teaching-style", "leadership", "cognitive", "big5", "emotional_intelligence"]),
+        dimension: z.string(),
+        count: z.number().min(5).max(50).default(10),
+      }))
+      .mutation(async ({ input }) => {
+        return await aiRouterService.generatePsychometricQuestions(
+          input.testType,
+          input.dimension,
+          input.count
+        );
+      }),
+    
+    /**
+     * Generate AI-powered competency assessment questions
+     * Generates questions aligned with UAE MOE competency frameworks
+     */
+    generateCompetencyQuestions: protectedProcedure
+      .input(z.object({
+        competencyArea: z.string(),
+        level: z.enum(["foundation", "intermediate", "advanced", "expert"]),
+        jobRole: z.string().optional(),
+        count: z.number().min(5).max(30).default(10),
+      }))
+      .mutation(async ({ input }) => {
+        // Use the licensing questions generator adapted for competency assessments
+        return await aiRouterService.generateLicensingQuestions(
+          input.jobRole || "Educator",
+          input.level,
+          input.competencyArea,
+          input.level,
+          "scenario", // Use scenario-based questions for competency
+          input.count
+        );
+      }),
+    
+    /**
+     * Test AI connection and get provider status
+     */
+    testConnection: protectedProcedure
+      .query(async () => {
+        return await aiRouterService.testConnection();
       }),
   }),
   

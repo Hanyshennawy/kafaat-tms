@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -8,10 +8,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { 
   Brain, Clock, ChevronLeft, ChevronRight, Save, CheckCircle2, 
   HelpCircle, Pause, Play, BookOpen, Heart, Target, Lightbulb,
-  GraduationCap, Users, MessageSquare, Sparkles, AlertCircle, Info
+  GraduationCap, Users, MessageSquare, Sparkles, AlertCircle, Info, Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 // Assessment type definitions
 const assessmentConfigs: Record<string, {
@@ -107,8 +108,8 @@ const assessmentConfigs: Record<string, {
   },
 };
 
-// Sample questions by type
-const sampleQuestions: Record<string, Array<{ id: number; text: string; section: string }>> = {
+// Sample questions by type (FALLBACK - used when AI is not available)
+const fallbackQuestions: Record<string, Array<{ id: number; text: string; section: string }>> = {
   personality: [
     { id: 1, text: "I see myself as someone who is talkative", section: "Extraversion" },
     { id: 2, text: "I tend to find fault with others", section: "Agreeableness" },
@@ -160,7 +161,12 @@ export default function TakeAssessment() {
   const assessmentType = urlParams.get('type') || 'personality';
   
   const config = assessmentConfigs[assessmentType] || assessmentConfigs.personality;
-  const questions = sampleQuestions[assessmentType] || sampleQuestions.personality;
+  
+  // State for AI-generated questions
+  const [questions, setQuestions] = useState<Array<{ id: number; text: string; section: string }>>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [isAiGenerated, setIsAiGenerated] = useState(false);
   
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -170,8 +176,69 @@ export default function TakeAssessment() {
   const [showResults, setShowResults] = useState(false);
   const [showTip, setShowTip] = useState(false);
   
-  const totalQuestions = questions.length;
-  const progress = ((currentQuestion + 1) / totalQuestions) * 100;
+  // AI question generation mutation
+  const generateQuestionsMutation = trpc.services.ai.generatePsychometricQuestions.useMutation();
+  
+  // Map assessment types to API test types
+  const testTypeMap: Record<string, string> = {
+    'personality': 'big5',
+    'eq': 'emotional_intelligence',
+    'teaching-style': 'teaching_style',
+    'leadership': 'leadership',
+    'cognitive': 'cognitive',
+  };
+  
+  // Load AI-generated questions when starting assessment
+  const loadAIQuestions = async () => {
+    setIsLoadingQuestions(true);
+    setAiError(null);
+    
+    try {
+      const testType = testTypeMap[assessmentType] || 'big5';
+      const dimension = config.sections[0]?.name || 'General';
+      const count = config.totalQuestions;
+      
+      const aiQuestions = await generateQuestionsMutation.mutateAsync({
+        testType: testType as any,
+        dimension,
+        count: Math.min(count, 50), // API limit
+      });
+      
+      if (aiQuestions && aiQuestions.length > 0) {
+        // Transform AI questions to component format
+        const formattedQuestions = aiQuestions.map((q: any, idx: number) => ({
+          id: idx + 1,
+          text: q.question || q.text || '',
+          section: q.dimension || config.sections[idx % config.sections.length]?.name || 'General',
+        }));
+        setQuestions(formattedQuestions);
+        setIsAiGenerated(true);
+        console.log(`[Assessment] Loaded ${formattedQuestions.length} AI-generated questions`);
+      } else {
+        // Fallback to static questions
+        setQuestions(fallbackQuestions[assessmentType] || fallbackQuestions.personality);
+        setIsAiGenerated(false);
+        console.log('[Assessment] Using fallback questions - AI returned empty');
+      }
+    } catch (error: any) {
+      console.warn('[Assessment] AI question generation failed, using fallback:', error);
+      setAiError(error?.message || 'AI service unavailable');
+      setQuestions(fallbackQuestions[assessmentType] || fallbackQuestions.personality);
+      setIsAiGenerated(false);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  };
+  
+  // Load questions when intro screen is dismissed
+  useEffect(() => {
+    if (!showIntro && questions.length === 0) {
+      loadAIQuestions();
+    }
+  }, [showIntro]);
+  
+  const totalQuestions = questions.length || config.totalQuestions;
+  const progress = questions.length > 0 ? ((currentQuestion + 1) / questions.length) * 100 : 0;
   const answeredCount = Object.keys(answers).length;
 
   // Timer effect
@@ -202,7 +269,7 @@ export default function TakeAssessment() {
   };
 
   const handleNext = () => {
-    if (currentQuestion < totalQuestions - 1) {
+    if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setShowTip(false);
     } else {
@@ -401,6 +468,57 @@ export default function TakeAssessment() {
   const currentQ = questions[currentQuestion];
   const IconComponent = config.icon;
 
+  // Loading state while generating AI questions
+  if (isLoadingQuestions) {
+    return (
+      <div className="container max-w-3xl py-8">
+        <Card>
+          <CardContent className="p-8">
+            <div className="text-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center mx-auto mb-6 animate-pulse">
+                <Sparkles className="h-10 w-10 text-white animate-spin" />
+              </div>
+              <h2 className="text-xl font-bold mb-2">Generating Your Assessment</h2>
+              <p className="text-muted-foreground mb-6">
+                Our AI is creating personalized {config.name} questions tailored to UAE education standards...
+              </p>
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>This may take a few seconds</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // No questions available
+  if (questions.length === 0) {
+    return (
+      <div className="container max-w-3xl py-8">
+        <Card>
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold mb-2">Unable to Load Questions</h2>
+            <p className="text-muted-foreground mb-6">
+              {aiError || 'We couldn\'t generate assessment questions. Please try again.'}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button variant="outline" onClick={() => window.history.back()}>
+                Go Back
+              </Button>
+              <Button onClick={loadAIQuestions}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container max-w-3xl py-8">
       <Card>
@@ -410,6 +528,12 @@ export default function TakeAssessment() {
               <CardTitle className="flex items-center gap-2">
                 <IconComponent className={`h-6 w-6 ${config.color}`} />
                 {config.name}
+                {isAiGenerated && (
+                  <Badge variant="secondary" className="ml-2 bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    AI-Powered
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription className="mt-2">
                 {config.description}
@@ -453,14 +577,14 @@ export default function TakeAssessment() {
 
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Question {currentQuestion + 1} of {totalQuestions}</span>
+              <span>Question {currentQuestion + 1} of {questions.length}</span>
               <span>{Math.round(progress)}% Complete</span>
             </div>
             <Progress value={progress} className="h-2" />
             
             {/* Question dots indicator */}
             <div className="flex gap-1 flex-wrap mt-2">
-              {questions.slice(0, Math.min(20, totalQuestions)).map((_, idx) => (
+              {questions.slice(0, Math.min(20, questions.length)).map((_, idx) => (
                 <div 
                   key={idx}
                   className={`w-2 h-2 rounded-full transition-colors cursor-pointer ${
@@ -473,8 +597,8 @@ export default function TakeAssessment() {
                   onClick={() => setCurrentQuestion(idx)}
                 />
               ))}
-              {totalQuestions > 20 && (
-                <span className="text-xs text-muted-foreground ml-1">+{totalQuestions - 20} more</span>
+              {questions.length > 20 && (
+                <span className="text-xs text-muted-foreground ml-1">+{questions.length - 20} more</span>
               )}
             </div>
           </div>
@@ -552,7 +676,7 @@ export default function TakeAssessment() {
               <div className="flex items-center justify-between text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
                 <span className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  {answeredCount} of {totalQuestions} answered
+                  {answeredCount} of {questions.length} answered
                 </span>
                 <span className="flex items-center gap-2">
                   <Save className="h-4 w-4" />
@@ -573,7 +697,7 @@ export default function TakeAssessment() {
                   onClick={handleNext}
                   disabled={!answers[currentQ?.id]}
                 >
-                  {currentQuestion === totalQuestions - 1 ? (
+                  {currentQuestion === questions.length - 1 ? (
                     <>
                       Submit
                       <CheckCircle2 className="ml-2 h-4 w-4" />

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   FileText,
   GraduationCap,
@@ -36,7 +37,7 @@ import {
   Loader2
 } from "lucide-react";
 
-// Journey Steps
+// Journey Steps (static - defines the process flow)
 const JOURNEY_STEPS = [
   { id: 1, name: "Eligibility Check", icon: FileCheck, description: "Verify your qualifications" },
   { id: 2, name: "Required Courses", icon: BookOpen, description: "Complete mandatory training" },
@@ -45,71 +46,57 @@ const JOURNEY_STEPS = [
   { id: 5, name: "License Issuance", icon: Award, description: "Receive your license" },
 ];
 
-// Mock License Types
-const LICENSE_TYPES = [
-  {
-    id: "teaching",
-    name: "Teaching License",
-    description: "Authorize to teach in K-12 institutions",
-    requirements: ["Bachelor's Degree in Education", "2+ years experience", "Background check"],
-    courses: 3,
-    examDuration: "2 hours",
-    fee: 500,
-  },
-  {
-    id: "leadership",
-    name: "School Leadership License",
-    description: "Authorize to serve as principal or administrator",
-    requirements: ["Master's Degree", "5+ years teaching", "Leadership certification"],
-    courses: 5,
-    examDuration: "3 hours",
-    fee: 800,
-  },
-  {
-    id: "specialist",
-    name: "Specialist License",
-    description: "For counselors, librarians, and special education",
-    requirements: ["Specialized Degree", "Relevant certifications", "Practicum hours"],
-    courses: 4,
-    examDuration: "2.5 hours",
-    fee: 600,
-  },
-];
-
-// Mock Required Courses
-const REQUIRED_COURSES = [
-  { id: 1, name: "UAE Education Law & Policy", duration: "4 hours", status: "completed", score: 92 },
-  { id: 2, name: "Child Safety & Protection", duration: "3 hours", status: "completed", score: 88 },
-  { id: 3, name: "Professional Ethics for Educators", duration: "2 hours", status: "in-progress", progress: 65 },
-  { id: 4, name: "Inclusive Education Practices", duration: "3 hours", status: "locked", progress: 0 },
-  { id: 5, name: "Digital Learning & Technology", duration: "2 hours", status: "locked", progress: 0 },
-];
-
 export default function NewLicenseJourney() {
   const [, setLocation] = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
-  const [selectedLicenseType, setSelectedLicenseType] = useState<string | null>(null);
+  const [selectedLicenseType, setSelectedLicenseType] = useState<number | null>(null);
   const [isEligible, setIsEligible] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: "Ahmed Al Mansouri",
-    emiratesId: "784-1990-1234567-1",
-    email: "ahmed.mansouri@school.ae",
-    phone: "+971 50 123 4567",
-    currentPosition: "Senior Teacher",
-    yearsExperience: "8",
-    highestQualification: "masters",
-    institution: "Dubai International Academy",
+    fullName: "",
+    emiratesId: "",
+    email: "",
+    phone: "",
+    currentPosition: "",
+    yearsExperience: "0",
+    highestQualification: "bachelors",
+    institution: "",
   });
 
-  // Simulated user progress (in real app, would come from API)
-  const [userProgress, setUserProgress] = useState({
-    coursesCompleted: 2,
-    totalCourses: 5,
-    examPassed: false,
+  // Fetch license types from database
+  const { data: licenseTypes = [], isLoading: typesLoading } = trpc.teachersLicensing.getAllLicenseTypes.useQuery();
+  
+  // Fetch required courses for selected license type
+  const { data: requiredCourses = [], isLoading: coursesLoading } = trpc.teachersLicensing.getCoursesForLicense.useQuery(
+    { licenseTypeId: selectedLicenseType! },
+    { enabled: !!selectedLicenseType }
+  );
+  
+  // Eligibility check mutation
+  const checkEligibilityMutation = trpc.teachersLicensing.checkEligibility.useMutation({
+    onSuccess: (result) => {
+      setIsEligible(result.eligible);
+      setIsChecking(false);
+      if (result.eligible) {
+        toast.success("Congratulations! You are eligible for this license.");
+      } else {
+        toast.error("You do not meet all requirements. " + (result.missingRequirements?.join(", ") || ""));
+      }
+    },
+    onError: (error) => {
+      setIsChecking(false);
+      toast.error("Failed to check eligibility: " + error.message);
+    }
+  });
+
+  // Compute user progress from courses data
+  const userProgress = {
+    coursesCompleted: requiredCourses.filter((c: any) => c.status === "completed").length,
+    totalCourses: requiredCourses.length || 5,
+    examPassed: false, // Would come from exam results
     examAttempts: 0,
     documentsSubmitted: false,
-  });
+  };
 
   const getStepStatus = (stepId: number) => {
     if (stepId < currentStep) return "completed";
@@ -118,12 +105,16 @@ export default function NewLicenseJourney() {
   };
 
   const handleEligibilityCheck = async () => {
+    if (!selectedLicenseType) {
+      toast.error("Please select a license type first");
+      return;
+    }
     setIsChecking(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsEligible(true);
-    setIsChecking(false);
-    toast.success("Congratulations! You are eligible for this license.");
+    checkEligibilityMutation.mutate({
+      licenseTypeId: selectedLicenseType,
+      qualification: formData.highestQualification,
+      yearsExperience: parseInt(formData.yearsExperience) || 0,
+    });
   };
 
   const handleContinueToNext = () => {
@@ -156,6 +147,9 @@ export default function NewLicenseJourney() {
         return null;
     }
   };
+  
+  // Get selected license type object
+  const selectedLicense = licenseTypes.find((l: any) => l.id === selectedLicenseType);
 
   const renderEligibilityStep = () => (
     <div className="space-y-6">
@@ -166,17 +160,25 @@ export default function NewLicenseJourney() {
           <CardDescription>Choose the type of license you want to apply for</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {LICENSE_TYPES.map((license) => (
-            <div
-              key={license.id}
-              onClick={() => setSelectedLicenseType(license.id)}
-              className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                selectedLicenseType === license.id
-                  ? "border-primary bg-primary/5"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-start justify-between">
+          {typesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="ml-2">Loading license types...</span>
+            </div>
+          ) : licenseTypes.length === 0 ? (
+            <p className="text-center text-muted-foreground py-4">No license types available</p>
+          ) : (
+            licenseTypes.map((license: any) => (
+              <div
+                key={license.id}
+                onClick={() => setSelectedLicenseType(license.id)}
+                className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                  selectedLicenseType === license.id
+                    ? "border-primary bg-primary/5"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h4 className="font-semibold">{license.name}</h4>
@@ -184,38 +186,32 @@ export default function NewLicenseJourney() {
                       <CheckCircle className="h-4 w-4 text-primary" />
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{license.description}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{license.description || 'Professional teaching license'}</p>
                   <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <BookOpen className="h-3 w-3" />
-                      {license.courses} Courses
+                      Training Required
                     </span>
                     <span className="flex items-center gap-1">
                       <Timer className="h-3 w-3" />
-                      {license.examDuration} Exam
+                      2-3 Hour Exam
                     </span>
                     <span className="flex items-center gap-1">
                       <FileText className="h-3 w-3" />
-                      AED {license.fee}
+                      Fee Applies
                     </span>
                   </div>
                 </div>
               </div>
-              {selectedLicenseType === license.id && (
+              {selectedLicenseType === license.id && license.requirements && (
                 <div className="mt-4 pt-4 border-t">
                   <p className="text-sm font-medium mb-2">Requirements:</p>
-                  <ul className="space-y-1">
-                    {license.requirements.map((req, idx) => (
-                      <li key={idx} className="text-sm text-muted-foreground flex items-center gap-2">
-                        <CheckCircle className="h-3 w-3 text-green-500" />
-                        {req}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-sm text-muted-foreground">{license.requirements}</p>
                 </div>
               )}
             </div>
-          ))}
+          ))
+          )}
         </CardContent>
       </Card>
 
@@ -338,16 +334,21 @@ export default function NewLicenseJourney() {
               <div className="p-3 bg-green-100 rounded-full">
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h4 className="font-semibold text-green-800">You're Eligible!</h4>
                 <p className="text-sm text-green-700 mt-1">
                   Based on your qualifications and experience, you meet the requirements for the{" "}
-                  {LICENSE_TYPES.find(l => l.id === selectedLicenseType)?.name}.
-                  Click "Continue" to proceed with the required courses.
+                  {selectedLicense?.name || 'selected license'}.
                 </p>
               </div>
             </div>
           </CardContent>
+          <CardFooter>
+            <Button onClick={handleContinueToNext} className="w-full" size="lg">
+              Continue to Required Courses
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </CardFooter>
         </Card>
       )}
     </div>
@@ -369,18 +370,26 @@ export default function NewLicenseJourney() {
         </CardHeader>
         <CardContent>
           <Progress 
-            value={(userProgress.coursesCompleted / userProgress.totalCourses) * 100} 
+            value={userProgress.totalCourses > 0 ? (userProgress.coursesCompleted / userProgress.totalCourses) * 100 : 0} 
             className="h-3 mb-6"
           />
 
+          {coursesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="ml-2">Loading courses...</span>
+            </div>
+          ) : requiredCourses.length === 0 ? (
+            <p className="text-center text-muted-foreground py-4">No courses available for this license type</p>
+          ) : (
           <div className="space-y-4">
-            {REQUIRED_COURSES.map((course, index) => (
+            {requiredCourses.map((course: any, index: number) => (
               <div
                 key={course.id}
                 className={`p-4 border rounded-lg ${
                   course.status === "completed" 
                     ? "bg-green-50 border-green-200" 
-                    : course.status === "in-progress"
+                    : course.status === "in_progress"
                     ? "bg-blue-50 border-blue-200"
                     : "bg-gray-50 border-gray-200"
                 }`}
@@ -390,13 +399,13 @@ export default function NewLicenseJourney() {
                     <div className={`p-2 rounded-full ${
                       course.status === "completed" 
                         ? "bg-green-100" 
-                        : course.status === "in-progress"
+                        : course.status === "in_progress"
                         ? "bg-blue-100"
                         : "bg-gray-100"
                     }`}>
                       {course.status === "completed" ? (
                         <CheckCircle className="h-5 w-5 text-green-600" />
-                      ) : course.status === "in-progress" ? (
+                      ) : course.status === "in_progress" ? (
                         <Play className="h-5 w-5 text-blue-600" />
                       ) : (
                         <Lock className="h-5 w-5 text-gray-400" />
@@ -405,7 +414,7 @@ export default function NewLicenseJourney() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Course {index + 1}</span>
-                        {course.status === "completed" && (
+                        {course.status === "completed" && course.score && (
                           <Badge variant="secondary" className="text-green-600 bg-green-100">
                             Score: {course.score}%
                           </Badge>
@@ -421,9 +430,9 @@ export default function NewLicenseJourney() {
                   <div className="text-right">
                     {course.status === "completed" ? (
                       <Badge className="bg-green-100 text-green-700">Completed</Badge>
-                    ) : course.status === "in-progress" ? (
+                    ) : course.status === "in_progress" ? (
                       <div className="space-y-2">
-                        <Badge className="bg-blue-100 text-blue-700">{course.progress}% Progress</Badge>
+                        <Badge className="bg-blue-100 text-blue-700">{course.progress || 0}% Progress</Badge>
                         <Button size="sm" className="block w-full">
                           <Play className="h-3 w-3 mr-1" />
                           Continue
@@ -437,14 +446,15 @@ export default function NewLicenseJourney() {
                     )}
                   </div>
                 </div>
-                {course.status === "in-progress" && (
+                {course.status === "in_progress" && (
                   <div className="mt-3">
-                    <Progress value={course.progress} className="h-2" />
+                    <Progress value={course.progress || 0} className="h-2" />
                   </div>
                 )}
               </div>
             ))}
           </div>
+          )}
         </CardContent>
         <CardFooter className="flex-col items-start gap-4">
           <Separator />

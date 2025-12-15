@@ -50,6 +50,8 @@ import {
   licenseHistory,
   cpdRecords,
   assessmentResults,
+  licensingCourses,
+  userCourseProgress,
   notifications,
   ratings,
   auditLogs,
@@ -668,6 +670,230 @@ export async function getAssessmentResults(applicationId: number) {
   return db.select().from(assessmentResults)
     .where(eq(assessmentResults.applicationId, applicationId))
     .orderBy(desc(assessmentResults.takenAt));
+}
+
+// Get licenses for a specific user
+export async function getUserLicenses(userId: number) {
+  const db = await getDb();
+  if (!db) return demoData.demoLicenses.filter(l => l.applicantId === userId);
+  try {
+    return await db.select().from(licenses)
+      .where(eq(licenses.applicantId, userId))
+      .orderBy(desc(licenses.issueDate));
+  } catch (error) {
+    console.warn("[Database] Query failed, returning demo data");
+    markDbDisconnected();
+    return demoData.demoLicenses;
+  }
+}
+
+// Get applications for a specific user
+export async function getUserApplications(userId: number) {
+  const db = await getDb();
+  if (!db) return demoData.demoLicenseApplications.filter(a => a.applicantId === userId);
+  try {
+    return await db.select().from(licenseApplications)
+      .where(eq(licenseApplications.applicantId, userId))
+      .orderBy(desc(licenseApplications.createdAt));
+  } catch (error) {
+    console.warn("[Database] Query failed, returning demo data");
+    markDbDisconnected();
+    return demoData.demoLicenseApplications;
+  }
+}
+
+// Get CPD records for a specific user
+export async function getUserCpdRecords(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(cpdRecords)
+      .where(eq(cpdRecords.teacherId, userId))
+      .orderBy(desc(cpdRecords.completedAt));
+  } catch (error) {
+    console.warn("[Database] Query failed");
+    markDbDisconnected();
+    return [];
+  }
+}
+
+// Get dashboard statistics for licensing
+export async function getLicensingDashboardStats(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    // Return demo stats
+    return {
+      activeLicenses: 1,
+      pendingApplications: 1,
+      cpdHoursCompleted: 85,
+      cpdHoursRequired: 100,
+      daysToRenewal: 456,
+    };
+  }
+  
+  try {
+    // Get active licenses count
+    const activeLicensesResult = await db.select({ count: sql<number>`count(*)` })
+      .from(licenses)
+      .where(and(eq(licenses.applicantId, userId), eq(licenses.status, 'active')));
+    
+    // Get pending applications count
+    const pendingAppsResult = await db.select({ count: sql<number>`count(*)` })
+      .from(licenseApplications)
+      .where(and(
+        eq(licenseApplications.applicantId, userId),
+        inArray(licenseApplications.status, ['draft', 'submitted', 'under_review'])
+      ));
+    
+    // Get CPD hours
+    const cpdResult = await db.select({ totalHours: sql<number>`COALESCE(SUM(hours), 0)` })
+      .from(cpdRecords)
+      .where(eq(cpdRecords.teacherId, userId));
+    
+    // Get nearest expiring license
+    const nearestExpiry = await db.select()
+      .from(licenses)
+      .where(and(eq(licenses.applicantId, userId), eq(licenses.status, 'active')))
+      .orderBy(licenses.expiryDate)
+      .limit(1);
+    
+    let daysToRenewal = 999;
+    if (nearestExpiry.length > 0 && nearestExpiry[0].expiryDate) {
+      const expiryDate = new Date(nearestExpiry[0].expiryDate);
+      const today = new Date();
+      daysToRenewal = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    
+    return {
+      activeLicenses: Number(activeLicensesResult[0]?.count) || 0,
+      pendingApplications: Number(pendingAppsResult[0]?.count) || 0,
+      cpdHoursCompleted: Number(cpdResult[0]?.totalHours) || 0,
+      cpdHoursRequired: 100, // This could come from config
+      daysToRenewal,
+    };
+  } catch (error) {
+    console.warn("[Database] Query failed, returning demo stats");
+    markDbDisconnected();
+    return {
+      activeLicenses: 1,
+      pendingApplications: 1,
+      cpdHoursCompleted: 85,
+      cpdHoursRequired: 100,
+      daysToRenewal: 456,
+    };
+  }
+}
+
+// ============================================================================
+// LICENSING COURSES & PROGRESS
+// ============================================================================
+
+export async function getLicensingCourses(licenseTypeId: number) {
+  const db = await getDb();
+  if (!db) {
+    // Return demo courses for any license type
+    return [
+      { id: 1, licenseTypeId, name: "UAE Educational Standards & Curriculum", duration: "4 hours", status: "completed", orderIndex: 1, passingScore: 70 },
+      { id: 2, licenseTypeId, name: "Classroom Management Best Practices", duration: "6 hours", status: "completed", orderIndex: 2, passingScore: 70 },
+      { id: 3, licenseTypeId, name: "Student Assessment Methods", duration: "5 hours", status: "in_progress", orderIndex: 3, passingScore: 70 },
+      { id: 4, licenseTypeId, name: "Special Education Awareness", duration: "3 hours", status: "not_started", orderIndex: 4, passingScore: 70 },
+      { id: 5, licenseTypeId, name: "Professional Ethics for Educators", duration: "2 hours", status: "not_started", orderIndex: 5, passingScore: 70 },
+    ];
+  }
+  try {
+    return await db.select().from(licensingCourses)
+      .where(eq(licensingCourses.licenseTypeId, licenseTypeId))
+      .orderBy(licensingCourses.orderIndex);
+  } catch (error) {
+    console.warn("[Database] Query failed, returning demo courses");
+    markDbDisconnected();
+    return [
+      { id: 1, licenseTypeId, name: "UAE Educational Standards & Curriculum", duration: "4 hours", status: "completed", orderIndex: 1, passingScore: 70 },
+      { id: 2, licenseTypeId, name: "Classroom Management Best Practices", duration: "6 hours", status: "completed", orderIndex: 2, passingScore: 70 },
+      { id: 3, licenseTypeId, name: "Student Assessment Methods", duration: "5 hours", status: "in_progress", orderIndex: 3, passingScore: 70 },
+      { id: 4, licenseTypeId, name: "Special Education Awareness", duration: "3 hours", status: "not_started", orderIndex: 4, passingScore: 70 },
+      { id: 5, licenseTypeId, name: "Professional Ethics for Educators", duration: "2 hours", status: "not_started", orderIndex: 5, passingScore: 70 },
+    ];
+  }
+}
+
+export async function getUserCourseProgressByLicenseType(userId: number, licenseTypeId: number) {
+  const db = await getDb();
+  if (!db) {
+    // Return demo progress
+    return [
+      { courseId: 1, status: "completed", progress: 100, score: 92 },
+      { courseId: 2, status: "completed", progress: 100, score: 88 },
+      { courseId: 3, status: "in_progress", progress: 45, score: null },
+      { courseId: 4, status: "not_started", progress: 0, score: null },
+      { courseId: 5, status: "not_started", progress: 0, score: null },
+    ];
+  }
+  try {
+    // Get courses for this license type and join with user progress
+    const courses = await db.select().from(licensingCourses)
+      .where(eq(licensingCourses.licenseTypeId, licenseTypeId))
+      .orderBy(licensingCourses.orderIndex);
+    
+    const progressRecords = await db.select().from(userCourseProgress)
+      .where(eq(userCourseProgress.userId, userId));
+    
+    // Merge course data with progress
+    return courses.map(course => {
+      const progress = progressRecords.find(p => p.courseId === course.id);
+      return {
+        ...course,
+        userStatus: progress?.status || "not_started",
+        userProgress: progress?.progress || 0,
+        userScore: progress?.score || null,
+      };
+    });
+  } catch (error) {
+    console.warn("[Database] Query failed, returning demo progress");
+    markDbDisconnected();
+    return [];
+  }
+}
+
+export async function getCoursesWithProgress(userId: number, licenseTypeId: number) {
+  const courses = await getLicensingCourses(licenseTypeId);
+  const db = await getDb();
+  
+  if (!db) {
+    // Return demo data with progress
+    return [
+      { id: 1, name: "UAE Educational Standards & Curriculum", duration: "4 hours", status: "completed", progress: 100, score: 92 },
+      { id: 2, name: "Classroom Management Best Practices", duration: "6 hours", status: "completed", progress: 100, score: 88 },
+      { id: 3, name: "Student Assessment Methods", duration: "5 hours", status: "in_progress", progress: 45, score: null },
+      { id: 4, name: "Special Education Awareness", duration: "3 hours", status: "not_started", progress: 0, score: null },
+      { id: 5, name: "Professional Ethics for Educators", duration: "2 hours", status: "not_started", progress: 0, score: null },
+    ];
+  }
+  
+  try {
+    const progressRecords = await db.select().from(userCourseProgress)
+      .where(eq(userCourseProgress.userId, userId));
+    
+    return courses.map((course: any) => {
+      const progress = progressRecords.find(p => p.courseId === course.id);
+      return {
+        ...course,
+        status: progress?.status || "not_started",
+        progress: progress?.progress || 0,
+        score: progress?.score || null,
+      };
+    });
+  } catch (error) {
+    console.warn("[Database] Query failed, returning demo progress");
+    markDbDisconnected();
+    return [
+      { id: 1, name: "UAE Educational Standards & Curriculum", duration: "4 hours", status: "completed", progress: 100, score: 92 },
+      { id: 2, name: "Classroom Management Best Practices", duration: "6 hours", status: "completed", progress: 100, score: 88 },
+      { id: 3, name: "Student Assessment Methods", duration: "5 hours", status: "in_progress", progress: 45, score: null },
+      { id: 4, name: "Special Education Awareness", duration: "3 hours", status: "not_started", progress: 0, score: null },
+      { id: 5, name: "Professional Ethics for Educators", duration: "2 hours", status: "not_started", progress: 0, score: null },
+    ];
+  }
 }
 
 // ============================================================================

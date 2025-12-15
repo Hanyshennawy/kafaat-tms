@@ -430,6 +430,92 @@ Always respond with properly structured JSON.`,
     }
   }
 
+  /**
+   * Generate competency assessment questions
+   * Uses UAE MOE competency framework for educator evaluation
+   */
+  async generateCompetencyQuestions(
+    competencyArea: string,
+    level: string,
+    jobRole: string = "Educator",
+    count: number = 10
+  ): Promise<any[]> {
+    const startTime = Date.now();
+    
+    try {
+      const prompt = `Generate ${count} competency assessment questions for ${jobRole} at ${level} level.
+
+COMPETENCY AREA: ${competencyArea}
+
+UAE MOE COMPETENCY FRAMEWORK:
+Use these domains for context:
+1. Professional Knowledge - Subject expertise, curriculum understanding
+2. Professional Practice - Teaching strategies, assessment, learning environment
+3. Professional Engagement - Relationships, ethics, continuous development
+
+QUESTION REQUIREMENTS:
+- Assess practical demonstration of ${competencyArea} competencies
+- Include realistic classroom/school scenarios
+- Progressive complexity for ${level} level
+- Aligned with UAE education context
+- Measurable behavioral indicators
+
+For each question provide:
+- question: Scenario-based assessment question
+- competencyArea: "${competencyArea}"
+- level: "${level}"
+- behavioralIndicator: What behavior demonstrates competence
+- scoringCriteria: How to evaluate the response (1-5 scale descriptors)
+- options: Array of 4 response options (for multiple choice)
+- correctAnswer: Index of best response (0-3)
+- explanation: Why the correct answer demonstrates competence
+- developmentHint: Guidance for improvement
+
+Return as JSON object with "questions" array containing exactly ${count} questions.`;
+
+      const response = await invokeTogether({
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert educator competency assessor for UAE Ministry of Education.
+Create authentic, fair, and developmentally appropriate competency assessments.
+Focus on observable behaviors and practical application in UAE school settings.
+Always respond with properly structured JSON.`,
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 4000,
+        temperature: 0.5,
+        includeContext: true,
+      });
+
+      const content = response.choices[0]?.message?.content || '{}';
+      const result = JSON.parse(content as string);
+
+      await logAIUsage('competencyQuestions', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
+
+      // Normalize the response
+      const questions = result.questions || result.items || [];
+      return questions.map((q: any, idx: number) => ({
+        question: q.question || q.text || '',
+        competencyArea: q.competencyArea || competencyArea,
+        level: q.level || level,
+        behavioralIndicator: q.behavioralIndicator || '',
+        scoringCriteria: q.scoringCriteria || '',
+        options: q.options || [],
+        correctAnswer: q.correctAnswer ?? 0,
+        explanation: q.explanation || '',
+        developmentHint: q.developmentHint || '',
+        aiGenerated: true,
+      }));
+    } catch (error) {
+      console.error('[Together.ai] Competency question generation failed:', error);
+      await logAIUsage('competencyQuestions', 'together', false, Date.now() - startTime);
+      throw error;
+    }
+  }
+
   // ============================================================================
   // HELPER METHODS
   // ============================================================================

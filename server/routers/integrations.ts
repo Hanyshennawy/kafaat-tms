@@ -185,7 +185,7 @@ export const integrationsRouter = router({
       metrics: z.record(z.string(), z.number()),
     }))
     .query(async ({ ctx, input }) => {
-      return gamificationService.checkBadgeEligibility(ctx.user.id, input.metrics);
+      return gamificationService.checkAndAwardBadges(ctx.user.id, input.metrics);
     }),
 
   // ============================================================

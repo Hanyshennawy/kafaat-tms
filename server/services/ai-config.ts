@@ -7,17 +7,19 @@
  * - Provider availability
  * 
  * Provider Priority (when AI_PROVIDER not explicitly set):
- * 1. Ollama (free, local, recommended)
- * 2. Together.ai (free tier, cloud)
- * 3. OpenAI (paid, cloud)
- * 4. Templates (free, rule-based)
+ * 1. Together.ai (free tier, cloud - 5M tokens/month FREE)
+ * 2. Ollama (free, local - requires local installation)
+ * 3. Templates (free, rule-based)
+ * 4. OpenAI (paid, cloud)
  * 5. Mock (fallback)
  * 
  * Cost Breakdown:
- * - Ollama: $0 (local)
+ * - Together.ai: $0 free tier (5M tokens/month) / $8/mo paid
+ * - Ollama: $0 (local, requires installation)
  * - Templates: $0 (rule-based)
- * - Together.ai: $0 free tier / $8/mo paid
  * - OpenAI: $6-10/mo (critical requests only)
+ * 
+ * IMPORTANT: Set TOGETHER_API_KEY in .env for AI features to work!
  */
 
 export type AIProvider = 'ollama' | 'template' | 'together' | 'openai' | 'mock';
@@ -38,28 +40,28 @@ export interface AIFeatureConfig {
  * AI Provider Priority by Feature
  * 
  * This configuration optimizes for:
- * 1. Cost (Ollama/templates first - FREE)
- * 2. Quality (critical features use better models)
- * 3. Speed (templates are instant, Ollama is local)
- * 4. Privacy (Ollama keeps data local)
+ * 1. Availability (Together.ai cloud first - always available)
+ * 2. Cost (Free tier 5M tokens/month)
+ * 3. Quality (Llama 3.2 3B for most tasks)
+ * 4. Speed (templates are instant for simple tasks)
  */
 export const AI_FEATURE_CONFIG: Record<string, AIFeatureConfig> = {
   // ============================================================================
-  // OLLAMA-PREFERRED (Local AI - FREE, private)
+  // TOGETHER.AI PREFERRED (Cloud AI - FREE 5M tokens/month)
   // ============================================================================
   
   resumeParsing: {
-    provider: 'ollama',
-    fallbackProvider: 'together',
+    provider: 'together',
+    fallbackProvider: 'ollama',
     qualityThreshold: 8,
     costPerRequest: 0,
     avgResponseTime: 3000,
-    description: 'Extract structured data from resumes using local LLM',
+    description: 'Extract structured data from resumes using Together.ai Llama 3.2',
   },
   
   interviewQuestions: {
-    provider: 'ollama',
-    fallbackProvider: 'together',
+    provider: 'together',
+    fallbackProvider: 'ollama',
     qualityThreshold: 8,
     costPerRequest: 0,
     avgResponseTime: 4000,
@@ -67,7 +69,7 @@ export const AI_FEATURE_CONFIG: Record<string, AIFeatureConfig> = {
   },
   
   competencyGapAnalysis: {
-    provider: 'ollama',
+    provider: 'together',
     fallbackProvider: 'template',
     qualityThreshold: 7,
     costPerRequest: 0,
@@ -76,8 +78,8 @@ export const AI_FEATURE_CONFIG: Record<string, AIFeatureConfig> = {
   },
   
   licensingQuestions: {
-    provider: 'ollama',
-    fallbackProvider: 'together',
+    provider: 'together',
+    fallbackProvider: 'ollama',
     qualityThreshold: 8,
     costPerRequest: 0,
     avgResponseTime: 5000,
@@ -85,8 +87,8 @@ export const AI_FEATURE_CONFIG: Record<string, AIFeatureConfig> = {
   },
   
   jobDescriptionGeneration: {
-    provider: 'ollama',
-    fallbackProvider: 'together',
+    provider: 'together',
+    fallbackProvider: 'ollama',
     qualityThreshold: 7,
     costPerRequest: 0,
     avgResponseTime: 3000,
@@ -94,12 +96,21 @@ export const AI_FEATURE_CONFIG: Record<string, AIFeatureConfig> = {
   },
   
   psychometricQuestions: {
-    provider: 'ollama',
-    fallbackProvider: 'together',
+    provider: 'together',
+    fallbackProvider: 'ollama',
     qualityThreshold: 8,
     costPerRequest: 0,
     avgResponseTime: 4000,
     description: 'Generate psychometric assessment items',
+  },
+  
+  competencyQuestions: {
+    provider: 'together',
+    fallbackProvider: 'ollama',
+    qualityThreshold: 8,
+    costPerRequest: 0,
+    avgResponseTime: 4000,
+    description: 'Generate competency assessment questions',
   },
 
   // ============================================================================
@@ -199,6 +210,8 @@ export function isProviderAvailable(provider: AIProvider): boolean {
 /**
  * Get effective provider with fallback logic
  * Supports environment variable AI_PROVIDER to override defaults
+ * 
+ * Priority: Together.ai > Ollama > Template > OpenAI > Mock
  */
 export function getEffectiveProvider(feature: string): AIProvider {
   // If AI_PROVIDER environment variable is set, use it
@@ -209,20 +222,23 @@ export function getEffectiveProvider(feature: string): AIProvider {
   
   const config = getAIConfig(feature);
   
-  // For Ollama, check if we're in production (Render) - Ollama won't be available
-  if (config.provider === 'ollama') {
-    // In production (Render), skip Ollama and use fallback
+  // Check if Together.ai is available (PREFERRED - cloud, always available)
+  if (isProviderAvailable('together')) {
+    console.log(`[AI Config] Using Together.ai for '${feature}' (API key configured)`);
+    return 'together';
+  }
+  
+  // Check if Ollama is available (requires local installation)
+  if (config.provider === 'ollama' || config.fallbackProvider === 'ollama') {
+    // In production (Render), skip Ollama and use next fallback
     if (process.env.NODE_ENV === 'production' || process.env.RENDER === 'true') {
-      if (config.fallbackProvider && isProviderAvailable(config.fallbackProvider)) {
-        console.log(`[AI Config] Production mode: Using '${config.fallbackProvider}' for '${feature}' (Ollama not available in cloud)`);
-        return config.fallbackProvider;
-      }
+      console.log(`[AI Config] Production mode: Skipping Ollama for '${feature}'`);
+    } else {
+      // Check if Ollama URL is configured and potentially available
+      const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+      console.log(`[AI Config] Attempting Ollama for '${feature}' at ${ollamaUrl}`);
+      return 'ollama';
     }
-    
-    // Check if Ollama URL is configured or we're using default localhost
-    const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-    console.log(`[AI Config] Using Ollama for '${feature}' at ${ollamaUrl}`);
-    return 'ollama';
   }
   
   // Check primary provider
@@ -236,7 +252,12 @@ export function getEffectiveProvider(feature: string): AIProvider {
     return config.fallbackProvider;
   }
   
-  // Final fallback to mock
+  // Final fallback to template or mock
+  if (config.provider === 'template' || isProviderAvailable('template')) {
+    console.warn(`[AI Config] Falling back to template-based AI for '${feature}'`);
+    return 'template';
+  }
+  
   console.warn(`[AI Config] No providers available for '${feature}', using mock data`);
   return 'mock';
 }

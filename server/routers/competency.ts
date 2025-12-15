@@ -55,8 +55,8 @@ export const competencyRouter = router({
       const [result] = await database.insert(competencyFrameworks).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: competencyFrameworks.id });
+      return { id: result.id };
     }),
 
   updateFramework: adminProcedure
@@ -110,8 +110,8 @@ export const competencyRouter = router({
     .mutation(async ({ input }) => {
       const database = await getDb();
       if (!database) throw new Error("Database not available");
-      const [result] = await database.insert(competencyStandards).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(competencyStandards).values(input).returning({ id: competencyStandards.id });
+      return { id: result.id };
     }),
 
   // ============================================================================
@@ -178,7 +178,7 @@ export const competencyRouter = router({
       assessmentType: z.enum(["self_assessment", "peer_review", "supervisor_review", "external_assessment", "portfolio_review"]),
       assessmentDate: z.date(),
       score: z.number().min(0).max(100).optional(),
-      level: z.enum(["not_demonstrated", "developing", "proficient", "advanced", "expert"]).optional(),
+      level: z.enum(["not_started", "developing", "proficient", "advanced", "expert"]).optional(),
       strengths: z.string().optional(),
       areasForImprovement: z.string().optional(),
       recommendations: z.string().optional(),
@@ -189,15 +189,15 @@ export const competencyRouter = router({
       const [result] = await database.insert(competencyAssessments).values({
         ...input,
         assessorId: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: competencyAssessments.id });
+      return { id: result.id };
     }),
 
   completeAssessment: protectedProcedure
     .input(z.object({
       id: z.number(),
       score: z.number().min(0).max(100),
-      level: z.enum(["not_demonstrated", "developing", "proficient", "advanced", "expert"]),
+      level: z.enum(["not_started", "developing", "proficient", "advanced", "expert"]),
       strengths: z.string().optional(),
       areasForImprovement: z.string().optional(),
       recommendations: z.string().optional(),
@@ -260,8 +260,8 @@ export const competencyRouter = router({
       const [result] = await database.insert(assessmentEvidence).values({
         ...input,
         uploadedBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: assessmentEvidence.id });
+      return { id: result.id };
     }),
 
   verifyEvidence: adminProcedure
@@ -315,8 +315,8 @@ export const competencyRouter = router({
       const [result] = await database.insert(competencyDevelopmentPlans).values({
         ...input,
         educatorId: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: competencyDevelopmentPlans.id });
+      return { id: result.id };
     }),
 
   updateDevelopmentPlan: protectedProcedure
@@ -368,7 +368,7 @@ export const competencyRouter = router({
       const [result] = await database.insert(assessmentRubrics).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: assessmentRubrics.id });
+      return { id: result.id };
     }),
 });

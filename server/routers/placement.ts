@@ -53,7 +53,7 @@ export const placementRouter = router({
         .select()
         .from(staffPlacements)
         .where(eq(staffPlacements.employeeId, input.employeeId))
-        .orderBy(desc(staffPlacements.effectiveDate));
+        .orderBy(desc(staffPlacements.startDate));
     }),
 
   getMyPlacementHistory: protectedProcedure.query(async ({ ctx }) => {
@@ -63,7 +63,7 @@ export const placementRouter = router({
       .select()
       .from(staffPlacements)
       .where(eq(staffPlacements.employeeId, ctx.user.id))
-      .orderBy(desc(staffPlacements.effectiveDate));
+      .orderBy(desc(staffPlacements.startDate));
   }),
 
   createPlacement: adminProcedure
@@ -85,8 +85,8 @@ export const placementRouter = router({
       const [result] = await database.insert(staffPlacements).values({
         ...input,
         createdBy: ctx.user.id,
-      });
-      return { id: result.insertId };
+      }).returning({ id: staffPlacements.id });
+      return { id: result.id };
     }),
 
   updatePlacement: adminProcedure
@@ -125,7 +125,7 @@ export const placementRouter = router({
     return await database
       .select()
       .from(placementRequests)
-      .where(eq(placementRequests.requestedBy, ctx.user.id))
+      .where(eq(placementRequests.employeeId, ctx.user.id))
       .orderBy(desc(placementRequests.createdAt));
   }),
 
@@ -160,8 +160,8 @@ export const placementRouter = router({
         ...input,
         status: "submitted",
         submittedAt: new Date(),
-      });
-      return { id: result.insertId };
+      }).returning({ id: placementRequests.id });
+      return { id: result.id };
     }),
 
   updateRequest: protectedProcedure
@@ -214,7 +214,7 @@ export const placementRouter = router({
         .select()
         .from(placementApprovals)
         .where(eq(placementApprovals.placementRequestId, input.requestId))
-        .orderBy(placementApprovals.approvalOrder);
+        .orderBy(placementApprovals.approvalLevel);
     }),
 
   getPendingApprovals: protectedProcedure.query(async ({ ctx }) => {

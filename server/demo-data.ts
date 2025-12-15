@@ -293,7 +293,7 @@ export const demoLicenses = [
   {
     id: 1,
     applicationId: 2,
-    holderId: 6,
+    applicantId: 6,
     licenseTypeId: 2,
     licenseTierId: 1,
     licenseNumber: "TL-2025-00001",
@@ -307,7 +307,7 @@ export const demoLicenses = [
   {
     id: 2,
     applicationId: 1,
-    holderId: 5,
+    applicantId: 5,
     licenseTypeId: 1,
     licenseTierId: 2,
     licenseNumber: "TL-2025-00002",

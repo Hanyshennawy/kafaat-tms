@@ -604,6 +604,16 @@ export class AIRouterService {
    * Test AI connection - useful for health checks
    */
   async testConnection(): Promise<{ provider: string; available: boolean; message: string }> {
+    // First check Together.ai (preferred provider)
+    if (process.env.TOGETHER_API_KEY) {
+      return {
+        provider: 'together',
+        available: true,
+        message: 'Together.ai API key configured - using Llama 3.2 3B Instruct Turbo',
+      };
+    }
+    
+    // Then check Ollama
     if (ollamaService.isServiceAvailable()) {
       const result = await ollamaService.testConnection();
       return {
@@ -613,19 +623,118 @@ export class AIRouterService {
       };
     }
     
-    if (process.env.TOGETHER_API_KEY) {
-      return {
-        provider: 'together',
-        available: true,
-        message: 'Together.ai API key configured',
-      };
-    }
-    
     return {
       provider: 'template',
       available: true,
-      message: 'Using template-based AI (rule-based)',
+      message: 'Using template-based AI (rule-based) - Configure TOGETHER_API_KEY for AI features',
     };
+  }
+
+  /**
+   * Generate competency assessment questions with automatic provider selection
+   */
+  async generateCompetencyQuestions(
+    competencyArea: string,
+    level: string,
+    jobRole: string = "Educator",
+    count: number = 10
+  ): Promise<any[]> {
+    const provider = getEffectiveProvider('competencyQuestions');
+    const startTime = Date.now();
+    
+    try {
+      let result: any[];
+      
+      switch (provider) {
+        case 'together':
+          result = await togetherAIService.generateCompetencyQuestions(
+            competencyArea,
+            level,
+            jobRole,
+            count
+          );
+          break;
+        case 'ollama':
+          if (ollamaService.isServiceAvailable()) {
+            // Fallback to Together.ai for competency questions (Ollama doesn't have this method yet)
+            try {
+              result = await togetherAIService.generateCompetencyQuestions(
+                competencyArea,
+                level,
+                jobRole,
+                count
+              );
+            } catch {
+              result = this.getMockCompetencyQuestions(competencyArea, level, count);
+            }
+          } else {
+            result = this.getMockCompetencyQuestions(competencyArea, level, count);
+          }
+          break;
+        default:
+          result = this.getMockCompetencyQuestions(competencyArea, level, count);
+      }
+      
+      await logAIUsage('competencyQuestions', provider, true, Date.now() - startTime);
+      return result;
+    } catch (error) {
+      await logAIUsage('competencyQuestions', provider, false, Date.now() - startTime);
+      console.error('[AI Router] Competency question generation failed:', error);
+      return this.getMockCompetencyQuestions(competencyArea, level, count);
+    }
+  }
+
+  /**
+   * Get mock competency questions as fallback
+   */
+  private getMockCompetencyQuestions(competencyArea: string, level: string, count: number): any[] {
+    const baseQuestions: Record<string, string[]> = {
+      'Professional Knowledge': [
+        'How do you ensure your subject knowledge stays current with curriculum changes?',
+        'Describe how you differentiate instruction based on student learning styles.',
+        'What strategies do you use to connect subject matter to real-world applications?',
+        'How do you assess prior knowledge before introducing new concepts?',
+        'Explain your approach to addressing student misconceptions.',
+      ],
+      'Professional Practice': [
+        'Describe a lesson where you successfully engaged all students.',
+        'How do you create an inclusive learning environment?',
+        'What assessment methods do you use to track student progress?',
+        'How do you handle classroom management challenges?',
+        'Describe your approach to providing constructive feedback to students.',
+      ],
+      'Professional Engagement': [
+        'How do you collaborate with colleagues to improve teaching practices?',
+        'Describe your approach to parent communication and involvement.',
+        'How do you contribute to school-wide improvement initiatives?',
+        'What professional development have you pursued recently?',
+        'How do you model ethical behavior for students?',
+      ],
+    };
+
+    const relevantQuestions = baseQuestions[competencyArea] || baseQuestions['Professional Practice'];
+    const questions: any[] = [];
+    
+    for (let i = 0; i < count && i < relevantQuestions.length; i++) {
+      questions.push({
+        question: relevantQuestions[i],
+        competencyArea,
+        level,
+        behavioralIndicator: 'Demonstrates understanding and application of competency',
+        options: [
+          'Limited understanding - needs significant development',
+          'Developing - shows basic understanding with guidance',
+          'Proficient - consistently demonstrates competence',
+          'Advanced - exceeds expectations and mentors others'
+        ],
+        correctAnswer: 2,
+        explanation: 'A proficient response demonstrates consistent application of best practices.',
+        developmentHint: 'Focus on continuous improvement and peer collaboration.',
+        aiGenerated: false,
+      });
+    }
+    
+    return questions;
   }
 }
 

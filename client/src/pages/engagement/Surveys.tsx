@@ -697,7 +697,11 @@ export default function Surveys() {
                   </Button>
                 ) : (
                   <Button 
-                    onClick={() => createSurvey.mutate(newSurvey)}
+                    onClick={() => createSurvey.mutate({
+                      ...newSurvey,
+                      startDate: newSurvey.startDate ? new Date(newSurvey.startDate) : undefined,
+                      endDate: newSurvey.endDate ? new Date(newSurvey.endDate) : undefined,
+                    })}
                     disabled={!newSurvey.title || questions.length === 0}
                   >
                     Create Survey

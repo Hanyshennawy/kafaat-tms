@@ -251,17 +251,17 @@ export async function createDataSubjectRequest(data: {
     requestType: data.requestType,
     description: data.description,
     dueDate,
-  });
+  }).returning({ id: dataSubjectRequests.id });
 
   await tenantService.logAuditEvent(data.tenantId, data.requesterId, {
     action: "dsar.created",
     resourceType: "data_subject_request",
-    resourceId: String(result.insertId),
+    resourceId: String(result.id),
     metadata: { requestType: data.requestType },
     severity: "warning",
   });
 
-  return result.insertId;
+  return result.id;
 }
 
 /**

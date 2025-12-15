@@ -132,9 +132,9 @@ class TogetherClient {
   /**
    * Normalize messages to Together.ai format
    */
-  private normalizeMessages(messages: Message[]): Array<{ role: string; content: string }> {
+  private normalizeMessages(messages: Message[]): Array<{ role: 'user' | 'system' | 'assistant'; content: string }> {
     return messages.map(msg => ({
-      role: msg.role,
+      role: msg.role as 'user' | 'system' | 'assistant',
       content: Array.isArray(msg.content)
         ? msg.content.map(c => typeof c === 'string' ? c : (c as any).text || JSON.stringify(c)).join('\n')
         : typeof msg.content === 'string'
@@ -282,7 +282,8 @@ class TogetherClient {
         maxTokens: 10,
       });
 
-      const response = result.choices[0]?.message?.content || '';
+      const content = result.choices[0]?.message?.content;
+      const response = typeof content === 'string' ? content : '';
       return response.toLowerCase().includes('ok');
     } catch (error) {
       console.error('[Together.ai] Connection test failed:', error);

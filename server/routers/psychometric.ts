@@ -56,8 +56,8 @@ export const psychometricRouter = router({
         ...input,
         category: input.category as any, // Map to schema enum
         scoringMethod: (input.scoringMethod || "likert_scale") as any,
-      });
-      return { id: result.insertId };
+      }).returning({ id: psychometricTestTypes.id });
+      return { id: result.id };
     }),
 
   updateTestType: adminProcedure
@@ -111,8 +111,8 @@ export const psychometricRouter = router({
     .mutation(async ({ input }) => {
       const database = await getDb();
       if (!database) throw new Error("Database not available");
-      const [result] = await database.insert(psychometricQuestions).values(input);
-      return { id: result.insertId };
+      const [result] = await database.insert(psychometricQuestions).values(input).returning({ id: psychometricQuestions.id });
+      return { id: result.id };
     }),
 
   // ============================================================================
@@ -144,8 +144,8 @@ export const psychometricRouter = router({
       const [result] = await database.insert(psychometricOptions).values({
         ...input,
         orderIndex: input.orderIndex ?? 0,
-      });
-      return { id: result.insertId };
+      }).returning({ id: psychometricOptions.id });
+      return { id: result.id };
     }),
 
   // ============================================================================
@@ -228,8 +228,8 @@ export const psychometricRouter = router({
         testTypeId: input.testTypeId,
         status: "in_progress",
         startedAt: new Date(),
-      });
-      return { id: result.insertId, resumed: false };
+      }).returning({ id: psychometricAssessments.id });
+      return { id: result.id, resumed: false };
     }),
 
   submitResponse: protectedProcedure
@@ -264,8 +264,8 @@ export const psychometricRouter = router({
         return { id: existing.id, updated: true };
       }
 
-      const [result] = await database.insert(psychometricResponses).values(input);
-      return { id: result.insertId, updated: false };
+      const [result] = await database.insert(psychometricResponses).values(input).returning({ id: psychometricResponses.id });
+      return { id: result.id, updated: false };
     }),
 
   completeAssessment: protectedProcedure
@@ -335,9 +335,9 @@ export const psychometricRouter = router({
         interpretation: generateInterpretation(dimensionScores),
         strengths: JSON.stringify(dimensionScores), // Store dimension scores in strengths field
         recommendations: generateRecommendations(dimensionScores),
-      });
+      }).returning({ id: psychometricResults.id });
 
-      return { resultId: result.insertId, score: percentile };
+      return { resultId: result.id, score: percentile };
     }),
 
   // ============================================================================
