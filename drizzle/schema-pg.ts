@@ -1168,3 +1168,464 @@ export type GamificationUserBadge = typeof gamificationUserBadges.$inferSelect;
 export type GamificationPoints = typeof gamificationPoints.$inferSelect;
 export type GamificationLeaderboard = typeof gamificationLeaderboard.$inferSelect;
 export type GamificationUserStats = typeof gamificationUserStats.$inferSelect;
+
+// ============================================================================
+// MULTI-TENANT SAAS SCHEMA
+// Core tables for tenant management, subscriptions, and billing
+// Designed for Azure Marketplace SaaS transactable offers
+// ============================================================================
+
+// Enum definitions for tenant tables
+export const tenantStatusEnum = pgEnum("tenant_status", [
+  "pending_setup",
+  "active",
+  "suspended",
+  "cancelled",
+  "trial",
+  "grace_period"
+]);
+
+export const billingCycleEnum = pgEnum("billing_cycle", ["monthly", "quarterly", "annually"]);
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "active",
+  "past_due",
+  "cancelled",
+  "expired",
+  "suspended"
+]);
+
+export const usageMeteringStatusEnum = pgEnum("usage_metering_status", [
+  "pending",
+  "reported",
+  "accepted",
+  "rejected",
+  "duplicate"
+]);
+
+export const auditSeverityEnum = pgEnum("audit_severity", ["info", "warning", "critical"]);
+
+export const consentTypeEnum = pgEnum("consent_type", [
+  "terms_of_service",
+  "privacy_policy",
+  "data_processing",
+  "marketing_communications",
+  "data_sharing",
+  "biometric_data",
+  "performance_tracking"
+]);
+
+export const dsarTypeEnum = pgEnum("dsar_type", [
+  "access",
+  "rectification",
+  "erasure",
+  "portability",
+  "restriction",
+  "objection"
+]);
+
+export const dsarStatusEnum = pgEnum("dsar_status", [
+  "submitted",
+  "in_review",
+  "processing",
+  "completed",
+  "rejected",
+  "withdrawn"
+]);
+
+export const saasAppStatusEnum = pgEnum("saas_app_status", ["draft", "active", "maintenance", "deprecated"]);
+
+/**
+ * Tenants represent organizations subscribing to the SaaS.
+ * Each tenant is isolated and has their own data scope.
+ */
+export const tenants = pgTable("tenants", {
+  id: serial("id").primaryKey(),
+  
+  // Unique identifier for the tenant (UUID format)
+  tenantCode: varchar("tenant_code", { length: 64 }).notNull().unique(),
+  
+  // Organization details
+  name: varchar("name", { length: 255 }).notNull(),
+  displayName: varchar("display_name", { length: 255 }),
+  legalName: varchar("legal_name", { length: 255 }),
+  
+  // Contact information
+  primaryEmail: varchar("primary_email", { length: 320 }).notNull(),
+  billingEmail: varchar("billing_email", { length: 320 }),
+  phone: varchar("phone", { length: 32 }),
+  
+  // Address (UAE-focused)
+  country: varchar("country", { length: 2 }).default("AE").notNull(),
+  emirate: varchar("emirate", { length: 100 }),
+  city: varchar("city", { length: 100 }),
+  address: text("address"),
+  poBox: varchar("po_box", { length: 32 }),
+  
+  // Azure Marketplace integration
+  azureSubscriptionId: varchar("azure_subscription_id", { length: 64 }),
+  azureTenantId: varchar("azure_tenant_id", { length: 64 }),
+  marketplacePurchaseToken: varchar("marketplace_purchase_token", { length: 512 }),
+  marketplacePlanId: varchar("marketplace_plan_id", { length: 64 }),
+  marketplaceOfferId: varchar("marketplace_offer_id", { length: 64 }),
+  
+  // Branding
+  logoUrl: text("logo_url"),
+  primaryColor: varchar("primary_color", { length: 7 }),
+  
+  // Settings
+  defaultLanguage: varchar("default_language", { length: 10 }).default("en"),
+  timezone: varchar("timezone", { length: 64 }).default("Asia/Dubai"),
+  dateFormat: varchar("date_format", { length: 32 }).default("DD/MM/YYYY"),
+  
+  // Status
+  status: tenantStatusEnum("status").default("pending_setup").notNull(),
+  
+  // Trial information
+  trialEndsAt: timestamp("trial_ends_at"),
+  
+  // Data residency (TDRA compliance)
+  dataRegion: varchar("data_region", { length: 32 }).default("uae-north"),
+  
+  // Compliance flags
+  gdprConsent: boolean("gdpr_consent").default(false),
+  tdraCompliance: boolean("tdra_compliance").default(false),
+  dataProcessingAgreement: boolean("data_processing_agreement").default(false),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  activatedAt: timestamp("activated_at"),
+  suspendedAt: timestamp("suspended_at"),
+  cancelledAt: timestamp("cancelled_at"),
+});
+
+/**
+ * Subscription plans define the pricing tiers
+ */
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  
+  // Plan identification
+  planCode: varchar("plan_code", { length: 64 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  
+  // Azure Marketplace plan mapping
+  marketplacePlanId: varchar("marketplace_plan_id", { length: 64 }),
+  
+  // Pricing (in AED)
+  basePrice: numeric("base_price", { precision: 10, scale: 2 }).notNull(),
+  billingCycle: billingCycleEnum("billing_cycle").default("monthly").notNull(),
+  currency: varchar("currency", { length: 3 }).default("AED").notNull(),
+  
+  // Feature limits
+  maxUsers: integer("max_users"),
+  maxDepartments: integer("max_departments"),
+  maxStorageGb: integer("max_storage_gb"),
+  
+  // Module access (JSON array of enabled module codes)
+  enabledModules: json("enabled_modules"),
+  
+  // Features
+  features: json("features"),
+  
+  // Status
+  isActive: boolean("is_active").default(true).notNull(),
+  isPublic: boolean("is_public").default(true).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Tenant subscriptions track active plans
+ */
+export const tenantSubscriptions = pgTable("tenant_subscriptions", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  planId: integer("plan_id").notNull().references(() => subscriptionPlans.id),
+  
+  // Subscription period
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),
+  
+  // Status
+  status: subscriptionStatusEnum("status").default("active").notNull(),
+  
+  // Azure Marketplace subscription details
+  marketplaceSubscriptionId: varchar("marketplace_subscription_id", { length: 128 }),
+  marketplaceSaasSubscriptionStatus: varchar("marketplace_saas_status", { length: 64 }),
+  
+  // Billing
+  nextBillingDate: timestamp("next_billing_date"),
+  lastBillingDate: timestamp("last_billing_date"),
+  
+  // Auto-renewal
+  autoRenew: boolean("auto_renew").default(true).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  cancelledAt: timestamp("cancelled_at"),
+});
+
+/**
+ * Usage metering for billing purposes
+ * Tracks consumption-based metrics for Azure Marketplace metering API
+ */
+export const usageMetering = pgTable("usage_metering", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  subscriptionId: integer("subscription_id").notNull().references(() => tenantSubscriptions.id),
+  
+  // Metering dimension (e.g., "active_users", "storage_gb", "api_calls")
+  dimensionId: varchar("dimension_id", { length: 64 }).notNull(),
+  
+  // Usage data
+  quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
+  effectiveStartTime: timestamp("effective_start_time").notNull(),
+  
+  // Azure Marketplace metering
+  marketplaceUsageEventId: varchar("marketplace_usage_event_id", { length: 128 }),
+  reportedToMarketplace: boolean("reported_to_marketplace").default(false).notNull(),
+  reportedAt: timestamp("reported_at"),
+  
+  // Status
+  status: usageMeteringStatusEnum("status").default("pending").notNull(),
+  errorMessage: text("error_message"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Tenant-level feature flags and configuration
+ */
+export const tenantFeatures = pgTable("tenant_features", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  featureCode: varchar("feature_code", { length: 64 }).notNull(),
+  
+  isEnabled: boolean("is_enabled").default(false).notNull(),
+  configuration: json("configuration"),
+  
+  // Override from plan default
+  isOverride: boolean("is_override").default(false).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Azure AD tenant connections for SSO
+ */
+export const azureAdConnections = pgTable("azure_ad_connections", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  
+  // Azure AD tenant info
+  azureAdTenantId: varchar("azure_ad_tenant_id", { length: 64 }).notNull(),
+  azureAdTenantName: varchar("azure_ad_tenant_name", { length: 255 }),
+  
+  // Application registration
+  clientId: varchar("client_id", { length: 64 }),
+  // Note: Client secret should be stored in Azure Key Vault, referenced here
+  clientSecretKeyVaultRef: varchar("client_secret_kv_ref", { length: 255 }),
+  
+  // SCIM provisioning
+  scimEndpoint: text("scim_endpoint"),
+  scimToken: varchar("scim_token", { length: 512 }),
+  scimEnabled: boolean("scim_enabled").default(false).notNull(),
+  
+  // Configuration
+  allowedDomains: json("allowed_domains"),
+  autoProvisionUsers: boolean("auto_provision_users").default(true).notNull(),
+  defaultRole: varchar("default_role", { length: 64 }).default("employee"),
+  
+  // Status
+  isActive: boolean("is_active").default(true).notNull(),
+  lastSyncAt: timestamp("last_sync_at"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Enhanced audit log with tenant isolation
+ */
+export const tenantAuditLogs = pgTable("tenant_audit_logs", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  userId: integer("user_id"),
+  
+  // Action details
+  action: varchar("action", { length: 100 }).notNull(),
+  resourceType: varchar("resource_type", { length: 100 }).notNull(),
+  resourceId: varchar("resource_id", { length: 64 }),
+  
+  // Change tracking
+  previousState: json("previous_state"),
+  newState: json("new_state"),
+  
+  // Request context
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  requestId: varchar("request_id", { length: 64 }),
+  
+  // Additional metadata
+  metadata: json("metadata"),
+  
+  // Severity for compliance/security events
+  severity: auditSeverityEnum("severity").default("info").notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Data consent records for TDRA/privacy compliance
+ */
+export const dataConsentRecords = pgTable("data_consent_records", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  userId: integer("user_id").notNull(),
+  
+  // Consent type
+  consentType: consentTypeEnum("consent_type").notNull(),
+  
+  // Consent details
+  version: varchar("version", { length: 32 }).notNull(),
+  consentGiven: boolean("consent_given").notNull(),
+  consentText: text("consent_text"),
+  
+  // Audit trail
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at"),
+});
+
+/**
+ * Data retention policies per tenant
+ */
+export const dataRetentionPolicies = pgTable("data_retention_policies", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  
+  // Policy configuration
+  dataCategory: varchar("data_category", { length: 64 }).notNull(),
+  retentionDays: integer("retention_days").notNull(),
+  
+  // Deletion settings
+  autoDelete: boolean("auto_delete").default(false).notNull(),
+  archiveBeforeDelete: boolean("archive_before_delete").default(true).notNull(),
+  
+  // Legal hold
+  legalHold: boolean("legal_hold").default(false).notNull(),
+  legalHoldReason: text("legal_hold_reason"),
+  legalHoldUntil: timestamp("legal_hold_until"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Data subject access requests (DSAR) for TDRA compliance
+ */
+export const dataSubjectRequests = pgTable("data_subject_requests", {
+  id: serial("id").primaryKey(),
+  
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  requesterId: integer("requester_id").notNull(),
+  subjectUserId: integer("subject_user_id"),
+  
+  // Request type
+  requestType: dsarTypeEnum("request_type").notNull(),
+  
+  // Request details
+  description: text("description"),
+  
+  // Status tracking
+  status: dsarStatusEnum("status").default("submitted").notNull(),
+  
+  // Response
+  responseNotes: text("response_notes"),
+  dataExportUrl: text("data_export_url"),
+  
+  // Compliance tracking
+  dueDate: timestamp("due_date").notNull(),
+  completedAt: timestamp("completed_at"),
+  completedBy: integer("completed_by"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * SaaS application catalog entry for unified marketplace UI
+ */
+export const saasApplications = pgTable("saas_applications", {
+  id: serial("id").primaryKey(),
+  
+  // Application identification
+  appCode: varchar("app_code", { length: 64 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  displayName: varchar("display_name", { length: 255 }),
+  
+  // Description
+  shortDescription: varchar("short_description", { length: 500 }),
+  longDescription: text("long_description"),
+  
+  // Branding
+  iconUrl: text("icon_url"),
+  bannerUrl: text("banner_url"),
+  primaryColor: varchar("primary_color", { length: 7 }),
+  
+  // Categorization
+  category: varchar("category", { length: 100 }).notNull(),
+  tags: json("tags"),
+  
+  // Technical
+  baseUrl: text("base_url").notNull(),
+  healthCheckUrl: text("health_check_url"),
+  apiVersion: varchar("api_version", { length: 32 }),
+  
+  // Azure Marketplace
+  marketplaceOfferId: varchar("marketplace_offer_id", { length: 64 }),
+  marketplacePublisherId: varchar("marketplace_publisher_id", { length: 64 }),
+  
+  // Status
+  status: saasAppStatusEnum("status").default("draft").notNull(),
+  
+  // Metadata
+  features: json("features"),
+  supportedLanguages: json("supported_languages"),
+  documentationUrl: text("documentation_url"),
+  supportUrl: text("support_url"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Multi-Tenant Type Exports
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = typeof tenants.$inferInsert;
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
+export type TenantSubscription = typeof tenantSubscriptions.$inferSelect;
+export type InsertTenantSubscription = typeof tenantSubscriptions.$inferInsert;
+export type UsageMetering = typeof usageMetering.$inferSelect;
+export type InsertUsageMetering = typeof usageMetering.$inferInsert;
+export type TenantFeature = typeof tenantFeatures.$inferSelect;
+export type AzureAdConnection = typeof azureAdConnections.$inferSelect;
+export type TenantAuditLog = typeof tenantAuditLogs.$inferSelect;
+export type DataConsentRecord = typeof dataConsentRecords.$inferSelect;
+export type DataRetentionPolicy = typeof dataRetentionPolicies.$inferSelect;
+export type DataSubjectRequest = typeof dataSubjectRequests.$inferSelect;
+export type SaasApplication = typeof saasApplications.$inferSelect;
