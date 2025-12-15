@@ -559,45 +559,142 @@ export class AIRouterService {
    * Get mock psychometric questions as fallback
    */
   private getMockPsychometricQuestions(testType: string, dimension: string, count: number): any[] {
-    const questions = [];
-    const baseQuestions: Record<string, string[]> = {
+    // Professional educator-focused questions with varied types
+    const mockQuestions: Record<string, any[]> = {
       'big5': [
-        'I enjoy being the center of attention in social situations.',
-        'I prefer to have a plan rather than being spontaneous.',
-        'I find it easy to empathize with others\' feelings.',
-        'I remain calm under pressure.',
-        'I am curious about many different things.',
+        {
+          question: "How would you handle this classroom situation?",
+          type: "scenario",
+          scenario: "During a lesson, you notice two students are consistently off-task and distracting others. Your usual warning hasn't worked.",
+          dimension: "Conscientiousness",
+          options: [
+            { id: 'a', text: "Stop the lesson and address the behavior directly with the class", value: 3 },
+            { id: 'b', text: "Move closer to the students while continuing to teach", value: 4 },
+            { id: 'c', text: "Speak privately with them after class about expectations", value: 5 },
+            { id: 'd', text: "Send them to the office to avoid further disruption", value: 2 },
+          ]
+        },
+        {
+          question: "When collaborating with colleagues on a project, you typically:",
+          type: "multiple_choice",
+          dimension: "Extraversion",
+          options: [
+            { id: 'a', text: "Take the lead and coordinate team efforts", value: 5 },
+            { id: 'b', text: "Contribute ideas and support the group leader", value: 4 },
+            { id: 'c', text: "Prefer to work on your assigned section independently", value: 2 },
+            { id: 'd', text: "Listen to others' ideas before sharing your own", value: 3 },
+          ]
+        },
+        {
+          question: "In your approach to lesson planning:",
+          type: "forced_choice",
+          dimension: "Openness",
+          options: [
+            { id: 'a', text: "I enjoy experimenting with new teaching methods and technologies", value: 5 },
+            { id: 'b', text: "I prefer proven approaches that I know work effectively", value: 3 },
+          ]
+        },
+        {
+          question: "What would be your approach?",
+          type: "situational",
+          scenario: "A parent emails you with concerns about their child's recent grades. The tone seems frustrated and accusatory.",
+          dimension: "Agreeableness",
+          options: [
+            { id: 'a', text: "Respond promptly with empathy and offer to schedule a meeting", value: 5 },
+            { id: 'b', text: "Wait a day to respond to avoid reacting emotionally", value: 4 },
+            { id: 'c', text: "Forward to administration to handle the complaint", value: 2 },
+            { id: 'd', text: "Send a detailed defense of your grading decisions", value: 1 },
+          ]
+        },
+        {
+          question: "After receiving critical feedback from an observation:",
+          type: "multiple_choice",
+          dimension: "Emotional Stability",
+          options: [
+            { id: 'a', text: "Reflect on valid points and create an improvement plan", value: 5 },
+            { id: 'b', text: "Discuss the feedback with trusted colleagues for perspective", value: 4 },
+            { id: 'c', text: "Focus on areas where you disagreed with the observer", value: 2 },
+            { id: 'd', text: "Accept it but continue with your usual teaching approach", value: 3 },
+          ]
+        },
+      ],
+      'emotional_intelligence': [
+        {
+          question: "How do you respond?",
+          type: "scenario",
+          scenario: "A usually high-performing student has become withdrawn and their work quality has declined significantly over the past week.",
+          dimension: "Empathy",
+          options: [
+            { id: 'a', text: "Find a private moment to check in and ask if everything is okay", value: 5 },
+            { id: 'b', text: "Contact parents immediately to report the change", value: 3 },
+            { id: 'c', text: "Give them time - they may just be having a rough week", value: 2 },
+            { id: 'd', text: "Adjust expectations temporarily while monitoring the situation", value: 4 },
+          ]
+        },
+        {
+          question: "When you feel frustrated with a student's repeated mistakes:",
+          type: "forced_choice",
+          dimension: "Self-Regulation",
+          options: [
+            { id: 'a', text: "I take a breath and find a new way to explain the concept", value: 5 },
+            { id: 'b', text: "I sometimes show my frustration before catching myself", value: 2 },
+          ]
+        },
+        {
+          question: "In managing your own stress and workload:",
+          type: "multiple_choice",
+          dimension: "Self-Awareness",
+          options: [
+            { id: 'a', text: "I recognize my limits and take breaks when needed", value: 5 },
+            { id: 'b', text: "I push through until everything is done", value: 2 },
+            { id: 'c', text: "I prioritize tasks and delegate when possible", value: 4 },
+            { id: 'd', text: "I often feel overwhelmed but manage to cope", value: 3 },
+          ]
+        },
       ],
       'leadership': [
-        'I naturally take charge in group situations.',
-        'I inspire others to achieve their best.',
-        'I make decisions quickly and confidently.',
-        'I delegate tasks effectively to team members.',
-        'I handle conflicts constructively.',
+        {
+          question: "As a team leader, how would you approach this?",
+          type: "scenario",
+          scenario: "Your department needs to implement a new curriculum by next semester. Some team members are resistant to the change.",
+          dimension: "Change Management",
+          options: [
+            { id: 'a', text: "Meet individually with resistant members to understand concerns", value: 5 },
+            { id: 'b', text: "Present the benefits clearly and set firm deadlines", value: 3 },
+            { id: 'c', text: "Identify early adopters and use them to influence others", value: 4 },
+            { id: 'd', text: "Escalate to administration for support with implementation", value: 2 },
+          ]
+        },
+        {
+          question: "When making important decisions that affect your team:",
+          type: "forced_choice",
+          dimension: "Decision Making",
+          options: [
+            { id: 'a', text: "I gather input from stakeholders before deciding", value: 4 },
+            { id: 'b', text: "I analyze the data and make an informed decision quickly", value: 4 },
+          ]
+        },
       ],
       'cognitive': [
-        'I can easily identify patterns in complex data.',
-        'I enjoy solving puzzles and brain teasers.',
-        'I can remember detailed information accurately.',
-        'I adapt quickly to new situations.',
-        'I think through problems systematically.',
+        {
+          question: "Based on the information, what conclusion is most logical?",
+          type: "multiple_choice",
+          scenario: "All teachers who completed the workshop showed improved student engagement. Ms. Ahmed did not show improved engagement.",
+          dimension: "Verbal Reasoning",
+          options: [
+            { id: 'a', text: "Ms. Ahmed did not complete the workshop", value: 5 },
+            { id: 'b', text: "The workshop was ineffective for Ms. Ahmed", value: 1 },
+            { id: 'c', text: "Ms. Ahmed's students were already engaged", value: 1 },
+            { id: 'd', text: "Ms. Ahmed needs additional support", value: 1 },
+          ],
+          correctAnswer: 0,
+          explanation: "This is a logical deduction - if all completers showed improvement, and Ahmed didn't improve, she couldn't have completed it."
+        },
       ],
     };
 
-    const relevantQuestions = baseQuestions[testType] || baseQuestions['big5'];
-    
-    for (let i = 0; i < count && i < relevantQuestions.length; i++) {
-      questions.push({
-        question: relevantQuestions[i],
-        dimension: dimension,
-        type: 'likert',
-        options: ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
-        scoring: i % 2 === 0 ? 'normal' : 'reverse',
-        weight: 1.0,
-      });
-    }
-    
-    return questions;
+    const relevantQuestions = mockQuestions[testType] || mockQuestions['big5'];
+    return relevantQuestions.slice(0, count);
   }
 
   /**

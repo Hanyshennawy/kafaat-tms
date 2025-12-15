@@ -988,6 +988,9 @@ export const psychometricTestTypes = pgTable("psychometric_test_types", {
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
+// Question bank status for tracking usage
+export const questionBankStatusEnum = pgEnum("question_bank_status", ["available", "used", "retired", "archived"]);
+
 export const psychometricQuestions = pgTable("psychometric_questions", {
   id: serial("id").primaryKey(),
   testTypeId: integer("testTypeId").notNull(),
@@ -997,6 +1000,14 @@ export const psychometricQuestions = pgTable("psychometric_questions", {
   dimension: varchar("dimension", { length: 100 }),
   isReverseCoded: boolean("isReverseCoded").default(false),
   orderIndex: integer("orderIndex").notNull(),
+  // New fields for question bank management
+  status: questionBankStatusEnum("status").default("available").notNull(),
+  scenario: text("scenario"), // For situational/scenario questions
+  options: text("options"), // JSON string of options with values
+  usedAt: timestamp("usedAt"), // When question was used in assessment
+  usedInAssessmentId: integer("usedInAssessmentId"), // Which assessment used it
+  aiGenerated: boolean("aiGenerated").default(false),
+  qualityScore: integer("qualityScore"), // 1-10 quality rating
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

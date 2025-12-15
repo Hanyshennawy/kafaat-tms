@@ -342,73 +342,82 @@ Make it:
   ): Promise<any[]> {
     const startTime = Date.now();
     
+    // Limit count to prevent response truncation
+    const safeCount = Math.min(count, 10);
+    
     try {
-      const prompt = `Generate ${count} scientifically valid psychometric assessment items.
+      const prompt = `Generate exactly ${safeCount} psychometric questions for ${testType} assessment.
 
-Test Type: ${testType}
-Dimension to Measure: ${dimension}
+Dimension: ${dimension}
+Context: UAE education professionals
 
-IMPORTANT PSYCHOMETRIC DESIGN PRINCIPLES:
-1. Use clear, unambiguous language appropriate for UAE professionals
-2. Avoid double-barreled questions (asking two things at once)
-3. Include a mix of positively and negatively worded items
-4. Avoid extreme language (always, never, completely)
-5. Questions should have cultural sensitivity for UAE context
-6. Balance social desirability bias with reverse-scored items
+QUESTION TYPES TO USE (vary the types):
+1. "scenario" - Present a realistic workplace situation, ask how they would respond
+2. "multiple_choice" - Direct question with 4 labeled options (A, B, C, D)
+3. "forced_choice" - Only 2 options to choose between
+4. "situational" - Similar to scenario but focused on judgment
 
-TEST TYPE SPECIFIC GUIDELINES:
-${testType === 'big5' ? `
-- Measure Big Five personality traits: Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism
-- Use behavioral statements rather than self-labels
-- Example: "I enjoy meeting new people" (Extraversion) not "I am extroverted"
-` : testType === 'leadership' ? `
-- Measure leadership competencies: Vision, Decision-making, Team building, Communication, Emotional intelligence
-- Use situational and behavioral statements
-- Focus on UAE educational leadership context
-` : testType === 'cognitive' ? `
-- Assess cognitive abilities: Analytical thinking, Problem-solving, Pattern recognition, Memory, Adaptability
-- Use scenario-based questions
-- Appropriate for education sector professionals
-` : testType === 'emotional_intelligence' ? `
-- Measure EQ dimensions: Self-awareness, Self-regulation, Motivation, Empathy, Social skills
-- Use workplace scenarios relevant to schools
-- Focus on teacher-student and colleague interactions
-` : `
-- Measure relevant professional competencies
-- Use behavioral indicators
-- Align with UAE MOE standards
-`}
+CRITICAL: Return ONLY valid JSON. Keep responses concise.
 
-For each question, provide JSON with:
-- question: The assessment item text
-- dimension: "${dimension}" or relevant sub-dimension
-- type: "likert" (5-point scale), "forced-choice" (A/B choice), or "situational" (scenario-based)
-- options: Array of response options or scale labels
-- scoring: "normal" (higher = more of trait) or "reverse" (lower = more of trait)
-- weight: Importance weight (0.5 to 1.5, default 1.0)
-- rationale: Brief explanation of what this item measures
+Return this exact JSON structure:
+{
+  "questions": [
+    {
+      "question": "Question text here",
+      "type": "scenario",
+      "scenario": "Description of the situation (for scenario/situational types)",
+      "dimension": "${dimension}",
+      "options": [
+        {"id": "a", "text": "Option A text", "value": 5},
+        {"id": "b", "text": "Option B text", "value": 4},
+        {"id": "c", "text": "Option C text", "value": 3},
+        {"id": "d", "text": "Option D text", "value": 2}
+      ]
+    }
+  ]
+}
 
-Return as JSON object with "questions" array containing exactly ${count} items.`;
+Generate ${safeCount} varied questions. Keep each question under 50 words. Keep each option under 25 words.`;
 
       const response = await invokeTogether({
         messages: [
           {
             role: 'system',
-            content: `You are an expert psychometrician with deep knowledge of psychological assessment design. 
-You specialize in creating valid, reliable assessment instruments for organizational psychology in the UAE education sector.
-Your items should follow APA guidelines for psychological testing and be culturally appropriate for the UAE context.
-Always respond with properly structured JSON.`,
+            content: 'You are a psychometric assessment expert. Generate concise, valid JSON only. No markdown, no explanation.',
           },
           { role: 'user', content: prompt },
         ],
         response_format: { type: 'json_object' },
-        max_tokens: 4000,
-        temperature: 0.5, // Balanced for assessment items
+        max_tokens: 2500, // Reduced to prevent truncation
+        temperature: 0.5,
         includeContext: true,
       });
 
       const content = response.choices[0]?.message?.content || '{}';
-      const result = JSON.parse(content as string);
+      
+      // Try to parse JSON with repair logic
+      let result: any;
+      try {
+        result = JSON.parse(content as string);
+      } catch (parseError) {
+        // Attempt to repair truncated JSON
+        console.warn('[Together.ai] JSON parse failed, attempting repair...');
+        let repaired = (content as string).trim();
+        
+        // Remove any trailing incomplete entries
+        const lastCompleteQuestion = repaired.lastIndexOf('}]');
+        if (lastCompleteQuestion > 0) {
+          repaired = repaired.substring(0, lastCompleteQuestion + 2) + '}';
+        }
+        
+        // Try again
+        try {
+          result = JSON.parse(repaired);
+        } catch {
+          console.error('[Together.ai] JSON repair failed');
+          throw parseError;
+        }
+      }
 
       await logAIUsage('psychometricQuestions', 'together', true, Date.now() - startTime, response.usage?.total_tokens);
 
@@ -417,11 +426,17 @@ Always respond with properly structured JSON.`,
       return questions.map((q: any, idx: number) => ({
         question: q.question || q.text || q.item || '',
         dimension: q.dimension || dimension,
-        type: q.type || 'likert',
-        options: q.options || ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
-        scoring: q.scoring || (idx % 3 === 2 ? 'reverse' : 'normal'),
+        type: q.type || 'multiple_choice',
+        scenario: q.scenario,
+        options: q.options || [
+          { id: 'a', text: 'Strongly Disagree', value: 1 },
+          { id: 'b', text: 'Disagree', value: 2 },
+          { id: 'c', text: 'Neutral', value: 3 },
+          { id: 'd', text: 'Agree', value: 4 },
+          { id: 'e', text: 'Strongly Agree', value: 5 },
+        ],
+        scoring: q.scoring || 'normal',
         weight: q.weight || 1.0,
-        rationale: q.rationale || '',
       }));
     } catch (error) {
       console.error('[Together.ai] Psychometric question generation failed:', error);

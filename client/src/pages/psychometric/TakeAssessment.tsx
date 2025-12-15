@@ -480,37 +480,67 @@ export default function TakeAssessment() {
   const [timeRemaining, setTimeRemaining] = useState(config.duration * 60);
   const [showResults, setShowResults] = useState(false);
   const [showTip, setShowTip] = useState(false);
+  const [usedQuestionIds, setUsedQuestionIds] = useState<number[]>([]);
   
-  // AI question generation mutation
+  // Question bank query - fetches from professional question bank
+  const questionBankQuery = trpc.psychometric.getQuestionsForAssessment.useQuery(
+    { testType: assessmentType, count: config.totalQuestions },
+    { enabled: false } // Manual trigger
+  );
+  
+  // Mutation to mark questions as used after assessment
+  const markQuestionsUsedMutation = trpc.psychometric.markQuestionsUsed.useMutation();
+  
+  // AI question generation mutation (fallback)
   const generateQuestionsMutation = trpc.services.ai.generatePsychometricQuestions.useMutation();
   
   // Map assessment types to API test types
   const testTypeMap: Record<string, string> = {
-    'personality': 'big5',
+    'personality': 'personality',
     'eq': 'emotional_intelligence',
     'teaching-style': 'teaching_style',
     'leadership': 'leadership',
     'cognitive': 'cognitive',
   };
   
-  // Load AI-generated questions when starting assessment
-  const loadAIQuestions = async () => {
+  // Load questions from question bank (with AI fallback)
+  const loadQuestions = async () => {
     setIsLoadingQuestions(true);
     setAiError(null);
     
     try {
-      const testType = testTypeMap[assessmentType] || 'big5';
+      // First try: Professional Question Bank
+      const bankResult = await questionBankQuery.refetch();
+      
+      if (bankResult.data && bankResult.data.length > 0) {
+        const formattedQuestions = bankResult.data.map((q: any, idx: number) => ({
+          id: q.id || idx + 1,
+          text: q.text,
+          section: q.section,
+          type: q.type || 'multiple_choice',
+          scenario: q.scenario,
+          options: q.options,
+          traitMeasured: q.traitMeasured,
+        }));
+        setQuestions(formattedQuestions);
+        setUsedQuestionIds(formattedQuestions.map((q: any) => q.id).filter((id: any) => typeof id === 'number'));
+        setIsAiGenerated(false);
+        console.log(`[Assessment] Loaded ${formattedQuestions.length} questions from Question Bank`);
+        return;
+      }
+      
+      // Second try: AI-generated questions
+      const testType = testTypeMap[assessmentType] || 'personality';
       const dimension = config.sections[0]?.name || 'General';
-      const count = config.totalQuestions;
+      const count = Math.min(config.totalQuestions, 15);
       
       const aiQuestions = await generateQuestionsMutation.mutateAsync({
         testType: testType as any,
         dimension,
-        count: Math.min(count, 50), // API limit
+        count,
       });
       
       if (aiQuestions && aiQuestions.length > 0) {
-        // Transform AI questions to component format, preserving type and options
         const formattedQuestions = aiQuestions.map((q: any, idx: number) => ({
           id: idx + 1,
           text: q.question || q.text || '',
@@ -529,14 +559,14 @@ export default function TakeAssessment() {
         setIsAiGenerated(true);
         console.log(`[Assessment] Loaded ${formattedQuestions.length} AI-generated questions`);
       } else {
-        // Fallback to static questions
+        // Final fallback: Static questions
         setQuestions(fallbackQuestions[assessmentType] || fallbackQuestions.personality);
         setIsAiGenerated(false);
-        console.log('[Assessment] Using fallback questions - AI returned empty');
+        console.log('[Assessment] Using fallback static questions');
       }
     } catch (error: any) {
-      console.warn('[Assessment] AI question generation failed, using fallback:', error);
-      setAiError(error?.message || 'AI service unavailable');
+      console.warn('[Assessment] Question loading failed, using fallback:', error);
+      setAiError(error?.message || 'Could not load questions');
       setQuestions(fallbackQuestions[assessmentType] || fallbackQuestions.personality);
       setIsAiGenerated(false);
     } finally {
@@ -547,7 +577,7 @@ export default function TakeAssessment() {
   // Load questions when intro screen is dismissed
   useEffect(() => {
     if (!showIntro && questions.length === 0) {
-      loadAIQuestions();
+      loadQuestions();
     }
   }, [showIntro]);
   
@@ -587,6 +617,20 @@ export default function TakeAssessment() {
       setCurrentQuestion(currentQuestion + 1);
       setShowTip(false);
     } else {
+      // Assessment completed - mark questions as used for AI replenishment
+      if (usedQuestionIds.length > 0) {
+        markQuestionsUsedMutation.mutate({
+          questionIds: usedQuestionIds,
+          assessmentId: Date.now(), // Use timestamp as mock assessment ID
+        }, {
+          onSuccess: () => {
+            console.log('[Assessment] Questions marked as used - bank will be replenished');
+          },
+          onError: (err) => {
+            console.warn('[Assessment] Could not mark questions as used:', err);
+          }
+        });
+      }
       setShowResults(true);
     }
   };

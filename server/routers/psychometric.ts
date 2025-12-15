@@ -2,6 +2,7 @@
  * MODULE 10: EDUCATOR PSYCHOMETRIC ASSESSMENTS ROUTER
  * 
  * Manages psychometric tests, personality assessments, and cognitive ability evaluations.
+ * Includes dynamic question bank with AI replenishment.
  */
 
 import { z } from "zod";
@@ -16,6 +17,7 @@ import {
   psychometricResponses,
   psychometricResults,
 } from "../../drizzle/schema-pg";
+import { questionBankService, PROFESSIONAL_QUESTION_BANK } from "../services/question-bank.service";
 
 export const psychometricRouter = router({
   // ============================================================================
@@ -507,6 +509,110 @@ export const psychometricRouter = router({
 
     return stats;
   }),
+
+  // ============================================================================
+  // QUESTION BANK MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get available questions for an assessment
+   * Returns fresh, never-before-used questions
+   */
+  getQuestionsForAssessment: protectedProcedure
+    .input(z.object({
+      testType: z.string(),
+      count: z.number().min(1).max(50).default(10),
+    }))
+    .query(async ({ input }) => {
+      const questions = await questionBankService.getAvailableQuestions(
+        input.testType,
+        input.count
+      );
+      
+      return questions.map((q, idx) => ({
+        id: q.id || idx + 1,
+        text: q.questionText,
+        type: q.questionType,
+        section: q.dimension,
+        scenario: q.scenario,
+        options: q.options,
+        traitMeasured: q.traitMeasured,
+      }));
+    }),
+
+  /**
+   * Mark questions as used after assessment
+   * Triggers AI replenishment automatically
+   */
+  markQuestionsUsed: protectedProcedure
+    .input(z.object({
+      questionIds: z.array(z.number()),
+      assessmentId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      await questionBankService.markQuestionsAsUsed(input.questionIds, input.assessmentId);
+      return { success: true, markedCount: input.questionIds.length };
+    }),
+
+  /**
+   * Get question bank statistics
+   */
+  getQuestionBankStats: adminProcedure.query(async () => {
+    return await questionBankService.getQuestionBankStats();
+  }),
+
+  /**
+   * Populate initial question bank from professional questions
+   */
+  populateQuestionBank: adminProcedure.mutation(async () => {
+    const result = await questionBankService.populateInitialQuestionBank();
+    return { success: true, ...result };
+  }),
+
+  /**
+   * Manually trigger AI question generation
+   */
+  generateMoreQuestions: adminProcedure
+    .input(z.object({
+      count: z.number().min(1).max(50).default(10),
+    }))
+    .mutation(async ({ input }) => {
+      await questionBankService.replenishQuestionBank(input.count);
+      return { success: true, requested: input.count };
+    }),
+
+  /**
+   * Get static professional question bank (for fallback/preview)
+   */
+  getStaticQuestionBank: protectedProcedure
+    .input(z.object({
+      testType: z.string().optional(),
+    }))
+    .query(({ input }) => {
+      if (input.testType && PROFESSIONAL_QUESTION_BANK[input.testType]) {
+        return {
+          [input.testType]: PROFESSIONAL_QUESTION_BANK[input.testType].map((q, idx) => ({
+            id: idx + 1,
+            text: q.questionText,
+            type: q.questionType,
+            section: q.dimension,
+            scenario: q.scenario,
+            options: q.options,
+          })),
+        };
+      }
+      
+      // Return all test types with counts
+      const summary: Record<string, { count: number; types: string[] }> = {};
+      for (const [type, questions] of Object.entries(PROFESSIONAL_QUESTION_BANK)) {
+        const questionTypes = [...new Set(questions.map(q => q.questionType))];
+        summary[type] = {
+          count: questions.length,
+          types: questionTypes,
+        };
+      }
+      return summary;
+    }),
 });
 
 // Helper functions
