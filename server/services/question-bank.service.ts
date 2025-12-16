@@ -46,6 +46,7 @@ export interface ProfessionalQuestion {
   traitMeasured?: string;
   isReverseCoded?: boolean;
   qualityScore?: number;
+  aiGenerated?: boolean;
 }
 
 export interface QuestionOption {
@@ -860,12 +861,12 @@ export const PROFESSIONAL_QUESTION_BANK: Record<string, ProfessionalQuestion[]> 
 export class QuestionBankService {
   /**
    * Get available questions for an assessment type
-   * Returns a mix of question types with anti-faking measures
-   * Minimum 25 questions per assessment
+   * Uses AI to generate questions dynamically via Together.ai
+   * Falls back to static questions only if AI fails
    */
   async getAvailableQuestions(
     testType: string, 
-    count: number = 25, // Increased default from 10 to 25
+    count: number = 25,
     dimensions?: string[]
   ): Promise<ProfessionalQuestion[]> {
     const database = await getDb();
@@ -888,14 +889,77 @@ export class QuestionBankService {
           .limit(targetCount);
 
         if (dbQuestions.length >= targetCount) {
+          console.log(`[QuestionBank] Retrieved ${dbQuestions.length} questions from database for ${testType}`);
           return dbQuestions.map(q => this.mapDbQuestionToQuestion(q));
         }
       } catch (error) {
-        console.warn('[QuestionBank] Database query failed, using static questions');
+        console.warn('[QuestionBank] Database query failed, trying AI generation');
       }
     }
 
-    // Build comprehensive question set from multiple sources
+    // Try AI generation via Together.ai
+    try {
+      console.log(`[QuestionBank] Generating ${targetCount} AI questions for ${testType} assessment...`);
+      const aiQuestions = await this.generateAIQuestions(testType, targetCount, dimensions);
+      if (aiQuestions.length > 0) {
+        console.log(`[QuestionBank] ✅ AI generated ${aiQuestions.length} questions for ${testType}`);
+        return aiQuestions;
+      }
+    } catch (error) {
+      console.warn('[QuestionBank] AI generation failed:', error);
+    }
+
+    // Final fallback: static questions (only if AI fails)
+    console.warn('[QuestionBank] ⚠️ Falling back to static questions for', testType);
+    return this.getStaticQuestions(testType, targetCount);
+  }
+
+  /**
+   * Generate questions using AI (Together.ai)
+   */
+  private async generateAIQuestions(
+    testType: string,
+    count: number,
+    dimensions?: string[]
+  ): Promise<ProfessionalQuestion[]> {
+    const questions: ProfessionalQuestion[] = [];
+    
+    // Generate questions via AI router (uses Together.ai)
+    const aiQuestions = await aiRouterService.generatePsychometricQuestions(
+      testType === 'personality' ? 'big5' : testType,
+      dimensions?.[0] || 'General',
+      count
+    );
+
+    // Map AI response to ProfessionalQuestion format
+    for (let i = 0; i < aiQuestions.length; i++) {
+      const q = aiQuestions[i];
+      questions.push({
+        id: 50000 + i, // High ID to distinguish AI-generated
+        testType: testType,
+        questionText: q.question || q.questionText || q.text,
+        questionType: q.type || q.questionType || 'likert',
+        dimension: q.dimension || testType,
+        traitMeasured: q.traitMeasured || q.dimension || testType,
+        scenario: q.scenario,
+        options: (q.options || []).map((opt: any, idx: number) => ({
+          id: opt.id || `opt_${idx}`,
+          text: opt.text || opt.label || String(opt),
+          value: opt.value ?? opt.score ?? (idx + 1),
+        })),
+        isReverseCoded: q.isReverseCoded || q.scoring === 'reverse' || false,
+        qualityScore: q.qualityScore || 8,
+        aiGenerated: true,
+      });
+    }
+
+    return questions;
+  }
+
+  /**
+   * Get static fallback questions (used only when AI fails)
+   */
+  private getStaticQuestions(testType: string, targetCount: number): ProfessionalQuestion[] {
     const questions: ProfessionalQuestion[] = [];
     
     // 1. Add questions from PROFESSIONAL_QUESTION_BANK (30%)
@@ -927,7 +991,7 @@ export class QuestionBankService {
     // Shuffle all questions to prevent pattern recognition
     const shuffled = [...questions].sort(() => Math.random() - 0.5);
     
-    console.log(`[QuestionBank] Prepared ${shuffled.length} questions for ${testType} assessment`);
+    console.log(`[QuestionBank] Prepared ${shuffled.length} static questions for ${testType} assessment`);
     return shuffled.slice(0, targetCount);
   }
 
