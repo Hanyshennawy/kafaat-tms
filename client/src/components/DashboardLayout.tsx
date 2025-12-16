@@ -57,7 +57,8 @@ import {
   Database,
   FileText,
   Award,
-  BookOpen
+  BookOpen,
+  Sparkles
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -344,6 +345,8 @@ const menuCategories = [
           { label: "QMS Analytics", path: "/admin/qms-analytics" },
         ]
       },
+      { icon: Sparkles, label: "AI Configuration", path: "/admin/ai-configuration" },
+      { icon: FileText, label: "Assessment Builder", path: "/admin/assessment-builder" },
       { icon: BarChart3, label: "Analytics Dashboard", path: "/analytics" },
       { icon: Shield, label: "Roles & Permissions", path: "/admin/rbac" },
       { icon: Briefcase, label: "Integrations", path: "/admin/integrations" },
