@@ -45,6 +45,22 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Psychometric enums (for psychometric test types and questions)
+DO $$ BEGIN
+  CREATE TYPE test_category AS ENUM ('personality', 'cognitive', 'emotional_intelligence', 'behavioral', 'teaching_style');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE scoring_method AS ENUM ('likert_scale', 'multiple_choice', 'true_false', 'rating_scale');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE test_status AS ENUM ('active', 'inactive', 'draft');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- AI Configurations Table (matches aiConfigurations in schema-pg.ts)
 CREATE TABLE IF NOT EXISTS ai_configurations (
   id SERIAL PRIMARY KEY,
@@ -233,6 +249,106 @@ CREATE TABLE IF NOT EXISTS ai_generation_logs (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- Psychometric Question Type Enum
+DO $$ BEGIN
+  CREATE TYPE psych_question_type AS ENUM ('likert', 'multiple_choice', 'forced_choice', 'scenario', 'rating');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Psychometric Assessment Status Enum
+DO $$ BEGIN
+  CREATE TYPE psych_assessment_status AS ENUM ('pending', 'in_progress', 'completed', 'expired');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Question Bank Status Enum
+DO $$ BEGIN
+  CREATE TYPE question_bank_status AS ENUM ('available', 'used', 'retired', 'archived');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Psychometric Questions Table
+CREATE TABLE IF NOT EXISTS psychometric_questions (
+  id SERIAL PRIMARY KEY,
+  "testTypeId" INTEGER NOT NULL,
+  "questionText" TEXT NOT NULL,
+  "questionType" psych_question_type NOT NULL,
+  "traitMeasured" VARCHAR(100),
+  dimension VARCHAR(100),
+  "isReverseCoded" BOOLEAN DEFAULT false,
+  "orderIndex" INTEGER NOT NULL,
+  status question_bank_status NOT NULL DEFAULT 'available',
+  scenario TEXT,
+  options TEXT,
+  "usedAt" TIMESTAMP,
+  "usedInAssessmentId" INTEGER,
+  "aiGenerated" BOOLEAN DEFAULT false,
+  "qualityScore" INTEGER,
+  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Psychometric Test Types Table
+CREATE TABLE IF NOT EXISTS psychometric_test_types (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category test_category NOT NULL,
+  description TEXT,
+  purpose TEXT,
+  duration INTEGER,
+  "questionCount" INTEGER,
+  "scoringMethod" scoring_method NOT NULL,
+  status test_status NOT NULL DEFAULT 'active',
+  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Psychometric Options Table
+CREATE TABLE IF NOT EXISTS psychometric_options (
+  id SERIAL PRIMARY KEY,
+  "questionId" INTEGER NOT NULL,
+  "optionText" VARCHAR(500) NOT NULL,
+  "scoreValue" INTEGER NOT NULL,
+  "orderIndex" INTEGER NOT NULL
+);
+
+-- Psychometric Assessments Table
+CREATE TABLE IF NOT EXISTS psychometric_assessments (
+  id SERIAL PRIMARY KEY,
+  "educatorId" INTEGER NOT NULL,
+  "testTypeId" INTEGER NOT NULL,
+  "startedAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "completedAt" TIMESTAMP,
+  status psych_assessment_status NOT NULL DEFAULT 'in_progress',
+  "timeSpent" INTEGER,
+  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Psychometric Responses Table
+CREATE TABLE IF NOT EXISTS psychometric_responses (
+  id SERIAL PRIMARY KEY,
+  "assessmentId" INTEGER NOT NULL,
+  "questionId" INTEGER NOT NULL,
+  "selectedOptionId" INTEGER,
+  "responseValue" INTEGER,
+  "responseTime" INTEGER,
+  "answeredAt" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Psychometric Results Table
+CREATE TABLE IF NOT EXISTS psychometric_results (
+  id SERIAL PRIMARY KEY,
+  "assessmentId" INTEGER NOT NULL,
+  "educatorId" INTEGER NOT NULL,
+  "testTypeId" INTEGER NOT NULL,
+  "overallScore" INTEGER,
+  "percentileRank" INTEGER,
+  interpretation TEXT,
+  strengths TEXT,
+  "developmentAreas" TEXT,
+  recommendations TEXT,
+  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_ai_configurations_config_type ON ai_configurations(config_type);
 CREATE INDEX IF NOT EXISTS idx_ai_configurations_status ON ai_configurations(status);
@@ -243,6 +359,9 @@ CREATE INDEX IF NOT EXISTS idx_assessment_builder_category ON assessment_builder
 CREATE INDEX IF NOT EXISTS idx_generated_questions_bank_category ON generated_questions_bank(category);
 CREATE INDEX IF NOT EXISTS idx_generated_questions_bank_question_type ON generated_questions_bank(question_type);
 CREATE INDEX IF NOT EXISTS idx_ai_generation_logs_config_id ON ai_generation_logs(config_id);
+CREATE INDEX IF NOT EXISTS idx_psychometric_questions_status ON psychometric_questions(status);
+CREATE INDEX IF NOT EXISTS idx_psychometric_questions_dimension ON psychometric_questions(dimension);
+CREATE INDEX IF NOT EXISTS idx_psychometric_assessments_educator ON psychometric_assessments("educatorId");
 `;
 
 // Default AI configurations to insert
@@ -288,6 +407,27 @@ SELECT
   'active',
   '[{"code": "O", "name": "Openness", "description": "Openness to experience"},{"code": "C", "name": "Conscientiousness", "description": "Self-discipline and organization"},{"code": "E", "name": "Extraversion", "description": "Social energy and assertiveness"},{"code": "A", "name": "Agreeableness", "description": "Cooperation and trust"},{"code": "N", "name": "Neuroticism", "description": "Emotional stability"}]'::json
 WHERE NOT EXISTS (SELECT 1 FROM assessment_frameworks_config WHERE code = 'big_five');
+
+-- Insert default psychometric test types
+INSERT INTO psychometric_test_types (id, name, category, description, purpose, duration, "questionCount", "scoringMethod", status)
+SELECT 1, 'Personality Assessment', 'personality', 'Comprehensive personality assessment using Big Five model', 'Measure personality traits for role fit', 30, 25, 'likert_scale', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM psychometric_test_types WHERE id = 1);
+
+INSERT INTO psychometric_test_types (id, name, category, description, purpose, duration, "questionCount", "scoringMethod", status)
+SELECT 2, 'Leadership Potential', 'behavioral', 'Assessment of leadership capabilities and potential', 'Identify leadership competencies', 25, 20, 'rating_scale', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM psychometric_test_types WHERE id = 2);
+
+INSERT INTO psychometric_test_types (id, name, category, description, purpose, duration, "questionCount", "scoringMethod", status)
+SELECT 3, 'Emotional Intelligence', 'emotional_intelligence', 'EQ assessment measuring emotional awareness and regulation', 'Measure emotional competencies', 20, 25, 'likert_scale', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM psychometric_test_types WHERE id = 3);
+
+INSERT INTO psychometric_test_types (id, name, category, description, purpose, duration, "questionCount", "scoringMethod", status)
+SELECT 4, 'Cognitive Ability', 'cognitive', 'General cognitive ability and reasoning test', 'Assess reasoning and problem-solving', 45, 30, 'multiple_choice', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM psychometric_test_types WHERE id = 4);
+
+INSERT INTO psychometric_test_types (id, name, category, description, purpose, duration, "questionCount", "scoringMethod", status)
+SELECT 5, 'Teaching Competency', 'teaching_style', 'UAE Educator Competency Framework Assessment', 'Evaluate teaching competencies', 35, 32, 'rating_scale', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM psychometric_test_types WHERE id = 5);
 `;
 
 export async function runMigrations(): Promise<void> {
