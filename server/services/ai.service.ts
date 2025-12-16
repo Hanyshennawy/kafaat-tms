@@ -1,35 +1,36 @@
 /**
- * AI Enhancement Service (OpenAI Provider)
+ * AI Enhancement Service (Together.ai / OpenAI Provider)
  * 
- * ⚠️ LEGACY SERVICE - For backward compatibility and OpenAI-specific features
+ * This service provides AI-powered features using Together.ai as PRIMARY provider.
+ * OpenAI is used as fallback for critical quality requirements.
  * 
- * NEW CODE SHOULD USE: ai-router.service.ts
+ * Provider Priority:
+ * 1. Together.ai (FREE tier - 5M tokens/month) - PRIMARY
+ * 2. OpenAI (paid) - fallback for critical tasks
  * 
- * This service provides OpenAI-powered features for critical quality requirements:
- * - Psychometric assessment questions (requires GPT-4 quality)
- * - Complex resume parsing (fallback)
- * - Advanced analysis (fallback)
- * 
- * Most features now use:
- * - ai-template.service.ts (60% - free, instant)
- * - ai-together.service.ts (35% - free tier, Together.ai)
- * - This service (5% - paid, critical quality)
+ * IMPORTANT: This service now routes through Together.ai first!
+ * Mock data is ONLY used if ALL providers fail.
  * 
  * See ai-router.service.ts for automatic provider selection.
  */
 
 import OpenAI from "openai";
 import { auditService } from "./audit.service";
+import { invokeTogether, togetherClient } from "../_core/together";
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 
 const openai = OPENAI_API_KEY
   ? new OpenAI({ apiKey: OPENAI_API_KEY })
   : null;
+
+// Check if Together.ai is available (PREFERRED)
+const isTogetherAvailable = () => !!TOGETHER_API_KEY && togetherClient.isServiceAvailable();
 
 // ============================================================================
 // TYPES
@@ -145,29 +146,60 @@ export interface InterviewQuestion {
 
 class AIService {
   private isConfigured: boolean;
+  private useTogetherAI: boolean;
 
   constructor() {
-    this.isConfigured = !!openai;
-    if (this.isConfigured) {
-      console.log("[AI] OpenAI configured");
-    } else {
-      console.log("[AI] OpenAI not configured. Set OPENAI_API_KEY for AI features.");
+    this.useTogetherAI = isTogetherAvailable();
+    this.isConfigured = !!openai || this.useTogetherAI;
+    
+    if (this.useTogetherAI) {
+      console.log("[AI] Together.ai configured as PRIMARY provider (FREE tier)");
+    }
+    if (openai) {
+      console.log("[AI] OpenAI configured as FALLBACK provider");
+    }
+    if (!this.isConfigured) {
+      console.warn("[AI] No AI provider configured. Set TOGETHER_API_KEY (recommended) or OPENAI_API_KEY for AI features.");
     }
   }
 
   /**
    * Parse a resume and extract structured data
+   * Uses Together.ai first, then OpenAI fallback
    */
   async parseResume(
     resumeText: string,
     tenantId?: number
   ): Promise<ResumeParseResult> {
-    if (!openai) {
-      return this.getMockResumeResult();
+    // Try Together.ai first (FREE)
+    if (this.useTogetherAI) {
+      try {
+        const result = await this.parseResumeWithTogether(resumeText, tenantId);
+        return result;
+      } catch (error) {
+        console.warn("[AI] Together.ai resume parsing failed, trying OpenAI fallback:", error);
+      }
     }
+    
+    // Try OpenAI fallback
+    if (openai) {
+      try {
+        return await this.parseResumeWithOpenAI(resumeText, tenantId);
+      } catch (error) {
+        console.error("[AI] OpenAI resume parsing also failed:", error);
+      }
+    }
+    
+    // Only return mock if ALL providers fail
+    console.error("[AI] All providers failed for resume parsing - returning mock data");
+    return this.getMockResumeResult();
+  }
 
-    try {
-      const prompt = `Analyze the following resume and extract structured information. Return a JSON object with:
+  /**
+   * Parse resume using Together.ai
+   */
+  private async parseResumeWithTogether(resumeText: string, tenantId?: number): Promise<ResumeParseResult> {
+    const prompt = `Analyze the following resume and extract structured information. Return a JSON object with:
 - name: Full name
 - email: Email address
 - phone: Phone number
@@ -184,39 +216,82 @@ class AIService {
 Resume text:
 ${resumeText}`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert HR professional and resume analyst. Extract structured data from resumes accurately. Always return valid JSON.",
-          },
-          { role: "user", content: prompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-      });
-
-      const result = JSON.parse(response.choices[0].message.content || "{}");
-
-      await auditService.success("ai.analysis", {
-        tenantId,
-        entityType: "resume",
-        details: {
-          action: "parse",
-          confidence: result.confidence,
+    const response = await invokeTogether({
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert HR professional and resume analyst. Extract structured data from resumes accurately. Always return valid JSON.",
         },
-      });
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    });
 
-      return result as ResumeParseResult;
-    } catch (error) {
-      console.error("[AI] Resume parsing failed:", error);
-      return this.getMockResumeResult();
-    }
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new Error("No response from Together.ai");
+    
+    const result = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
+
+    await auditService.success("ai.analysis", {
+      tenantId,
+      entityType: "resume",
+      details: { action: "parse", provider: "together", confidence: result.confidence },
+    });
+
+    return result as ResumeParseResult;
+  }
+
+  /**
+   * Parse resume using OpenAI (fallback)
+   */
+  private async parseResumeWithOpenAI(resumeText: string, tenantId?: number): Promise<ResumeParseResult> {
+    if (!openai) throw new Error("OpenAI not configured");
+    
+    const prompt = `Analyze the following resume and extract structured information. Return a JSON object with:
+- name: Full name
+- email: Email address
+- phone: Phone number
+- summary: Professional summary (2-3 sentences)
+- experience: Array of {title, company, duration, description, startDate, endDate}
+- education: Array of {degree, institution, year, gpa}
+- skills: Array of {name, level (beginner/intermediate/advanced/expert), category}
+- certifications: Array of {name, issuer, date, expiryDate}
+- languages: Array of {name, proficiency}
+- totalYearsExperience: Number
+- suggestedRole: Best fitting role for this candidate
+- confidence: Confidence score 0-1
+
+Resume text:
+${resumeText}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert HR professional and resume analyst. Extract structured data from resumes accurately. Always return valid JSON.",
+        },
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+
+    await auditService.success("ai.analysis", {
+      tenantId,
+      entityType: "resume",
+      details: { action: "parse", provider: "openai", confidence: result.confidence },
+    });
+
+    return result as ResumeParseResult;
   }
 
   /**
    * Get career recommendations based on employee profile
+   * Uses Together.ai first, then OpenAI fallback
    */
   async getCareerRecommendations(
     employeeProfile: {
@@ -229,12 +304,7 @@ ${resumeText}`;
     availableRoles: string[],
     tenantId?: number
   ): Promise<CareerRecommendation[]> {
-    if (!openai) {
-      return this.getMockCareerRecommendations();
-    }
-
-    try {
-      const prompt = `Analyze this employee profile and recommend career progression paths:
+    const prompt = `Analyze this employee profile and recommend career progression paths:
 
 Employee Profile:
 - Current Role: ${employeeProfile.currentRole}
@@ -256,51 +326,83 @@ Provide 3 career recommendations as JSON array with:
 - timelineMonths: Estimated months to be ready
 - trainingRecommendations: Specific training programs`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert career counselor specializing in education sector careers. Provide actionable career recommendations.",
-          },
-          { role: "user", content: prompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.3,
-      });
+    // Try Together.ai first (FREE)
+    if (this.useTogetherAI) {
+      try {
+        const response = await invokeTogether({
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert career counselor specializing in education sector careers. Provide actionable career recommendations.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error("No response from Together.ai");
+        
+        const result = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
 
-      await auditService.success("ai.analysis", {
-        tenantId,
-        entityType: "career",
-        details: {
-          action: "recommendations",
-          currentRole: employeeProfile.currentRole,
-        },
-      });
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "career",
+          details: { action: "recommendations", provider: "together", currentRole: employeeProfile.currentRole },
+        });
 
-      return result.recommendations || [];
-    } catch (error) {
-      console.error("[AI] Career recommendations failed:", error);
-      return this.getMockCareerRecommendations();
+        return result.recommendations || result || [];
+      } catch (error) {
+        console.warn("[AI] Together.ai career recommendations failed, trying OpenAI fallback:", error);
+      }
     }
+
+    // Try OpenAI fallback
+    if (openai) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert career counselor specializing in education sector careers. Provide actionable career recommendations.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "career",
+          details: { action: "recommendations", provider: "openai", currentRole: employeeProfile.currentRole },
+        });
+
+        return result.recommendations || [];
+      } catch (error) {
+        console.error("[AI] OpenAI career recommendations also failed:", error);
+      }
+    }
+
+    // Only return mock if ALL providers fail
+    console.error("[AI] All providers failed for career recommendations - returning mock data");
+    return this.getMockCareerRecommendations();
   }
 
   /**
    * Analyze sentiment in survey responses
+   * Uses Together.ai first, then OpenAI fallback
    */
   async analyzeSentiment(
     responses: string[],
     context: string = "Employee engagement survey",
     tenantId?: number
   ): Promise<SentimentAnalysis> {
-    if (!openai) {
-      return this.getMockSentimentAnalysis();
-    }
-
-    try {
-      const prompt = `Analyze the sentiment in these ${context} responses:
+    const prompt = `Analyze the sentiment in these ${context} responses:
 
 ${responses.map((r, i) => `${i + 1}. "${r}"`).join("\n")}
 
@@ -312,40 +414,76 @@ Return JSON with:
 - concerns: Array of concerns raised
 - suggestions: Array of actionable suggestions based on feedback`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert in organizational psychology and sentiment analysis. Analyze employee feedback constructively.",
-          },
-          { role: "user", content: prompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-      });
+    // Try Together.ai first (FREE)
+    if (this.useTogetherAI) {
+      try {
+        const response = await invokeTogether({
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert in organizational psychology and sentiment analysis. Analyze employee feedback constructively.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error("No response from Together.ai");
+        
+        const result = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
 
-      await auditService.success("ai.analysis", {
-        tenantId,
-        entityType: "survey",
-        details: {
-          action: "sentiment",
-          responseCount: responses.length,
-          sentiment: result.overallSentiment,
-        },
-      });
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "survey",
+          details: { action: "sentiment", provider: "together", responseCount: responses.length, sentiment: result.overallSentiment },
+        });
 
-      return result as SentimentAnalysis;
-    } catch (error) {
-      console.error("[AI] Sentiment analysis failed:", error);
-      return this.getMockSentimentAnalysis();
+        return result as SentimentAnalysis;
+      } catch (error) {
+        console.warn("[AI] Together.ai sentiment analysis failed, trying OpenAI fallback:", error);
+      }
     }
+
+    // Try OpenAI fallback
+    if (openai) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert in organizational psychology and sentiment analysis. Analyze employee feedback constructively.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "survey",
+          details: { action: "sentiment", provider: "openai", responseCount: responses.length, sentiment: result.overallSentiment },
+        });
+
+        return result as SentimentAnalysis;
+      } catch (error) {
+        console.error("[AI] OpenAI sentiment analysis also failed:", error);
+      }
+    }
+
+    // Only return mock if ALL providers fail
+    console.error("[AI] All providers failed for sentiment analysis - returning mock data");
+    return this.getMockSentimentAnalysis();
   }
 
   /**
    * Predict performance based on historical data
+   * Uses Together.ai first, then OpenAI fallback
    */
   async predictPerformance(
     employeeData: {
@@ -358,12 +496,7 @@ Return JSON with:
     },
     tenantId?: number
   ): Promise<PerformancePrediction> {
-    if (!openai) {
-      return this.getMockPerformancePrediction();
-    }
-
-    try {
-      const prompt = `Predict next performance rating based on this employee data:
+    const prompt = `Predict next performance rating based on this employee data:
 
 - Historical Ratings: ${employeeData.historicalRatings.join(", ")}
 - Attendance Rate: ${employeeData.attendanceRate}%
@@ -379,51 +512,83 @@ Return JSON with:
 - riskLevel: "low", "medium", or "high"
 - recommendations: Array of actions to improve performance`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an HR analytics expert specializing in performance prediction. Provide data-driven insights.",
-          },
-          { role: "user", content: prompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-      });
+    // Try Together.ai first (FREE)
+    if (this.useTogetherAI) {
+      try {
+        const response = await invokeTogether({
+          messages: [
+            {
+              role: "system",
+              content: "You are an HR analytics expert specializing in performance prediction. Provide data-driven insights.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error("No response from Together.ai");
+        
+        const result = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
 
-      await auditService.success("ai.analysis", {
-        tenantId,
-        entityType: "performance",
-        details: {
-          action: "prediction",
-          predictedRating: result.predictedRating,
-        },
-      });
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "performance",
+          details: { action: "prediction", provider: "together", predictedRating: result.predictedRating },
+        });
 
-      return result as PerformancePrediction;
-    } catch (error) {
-      console.error("[AI] Performance prediction failed:", error);
-      return this.getMockPerformancePrediction();
+        return result as PerformancePrediction;
+      } catch (error) {
+        console.warn("[AI] Together.ai performance prediction failed, trying OpenAI fallback:", error);
+      }
     }
+
+    // Try OpenAI fallback
+    if (openai) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are an HR analytics expert specializing in performance prediction. Provide data-driven insights.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "performance",
+          details: { action: "prediction", provider: "openai", predictedRating: result.predictedRating },
+        });
+
+        return result as PerformancePrediction;
+      } catch (error) {
+        console.error("[AI] OpenAI performance prediction also failed:", error);
+      }
+    }
+
+    // Only return mock if ALL providers fail
+    console.error("[AI] All providers failed for performance prediction - returning mock data");
+    return this.getMockPerformancePrediction();
   }
 
   /**
    * Analyze skills gap for a role transition
+   * Uses Together.ai first, then OpenAI fallback
    */
   async analyzeSkillsGap(
     currentSkills: { name: string; level: number }[],
     targetRole: string,
     tenantId?: number
   ): Promise<SkillsGapAnalysis> {
-    if (!openai) {
-      return this.getMockSkillsGapAnalysis();
-    }
-
-    try {
-      const prompt = `Analyze the skills gap for transitioning to ${targetRole}:
+    const prompt = `Analyze the skills gap for transitioning to ${targetRole}:
 
 Current Skills (0-100 proficiency):
 ${currentSkills.map((s) => `- ${s.name}: ${s.level}`).join("\n")}
@@ -435,40 +600,76 @@ For the target role "${targetRole}", provide JSON with:
 - overallReadiness: Percentage ready for the role 0-100
 - estimatedTimeToClose: Time needed to close gaps`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert in competency frameworks and skills development. Provide actionable skills gap analysis.",
-          },
-          { role: "user", content: prompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-      });
+    // Try Together.ai first (FREE)
+    if (this.useTogetherAI) {
+      try {
+        const response = await invokeTogether({
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert in competency frameworks and skills development. Provide actionable skills gap analysis.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error("No response from Together.ai");
+        
+        const result = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
 
-      await auditService.success("ai.analysis", {
-        tenantId,
-        entityType: "skills",
-        details: {
-          action: "gap_analysis",
-          targetRole,
-          readiness: result.overallReadiness,
-        },
-      });
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "skills",
+          details: { action: "gap_analysis", provider: "together", targetRole, readiness: result.overallReadiness },
+        });
 
-      return result as SkillsGapAnalysis;
-    } catch (error) {
-      console.error("[AI] Skills gap analysis failed:", error);
-      return this.getMockSkillsGapAnalysis();
+        return result as SkillsGapAnalysis;
+      } catch (error) {
+        console.warn("[AI] Together.ai skills gap analysis failed, trying OpenAI fallback:", error);
+      }
     }
+
+    // Try OpenAI fallback
+    if (openai) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert in competency frameworks and skills development. Provide actionable skills gap analysis.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "skills",
+          details: { action: "gap_analysis", provider: "openai", targetRole, readiness: result.overallReadiness },
+        });
+
+        return result as SkillsGapAnalysis;
+      } catch (error) {
+        console.error("[AI] OpenAI skills gap analysis also failed:", error);
+      }
+    }
+
+    // Only return mock if ALL providers fail
+    console.error("[AI] All providers failed for skills gap analysis - returning mock data");
+    return this.getMockSkillsGapAnalysis();
   }
 
   /**
    * Generate interview questions for a role
+   * Uses Together.ai first, then OpenAI fallback
    */
   async generateInterviewQuestions(
     role: string,
@@ -477,19 +678,14 @@ For the target role "${targetRole}", provide JSON with:
     count: number = 10,
     tenantId?: number
   ): Promise<InterviewQuestion[]> {
-    if (!openai) {
-      return this.getMockInterviewQuestions();
-    }
-
-    try {
-      const prompt = `Generate ${count} interview questions for ${role} position.
+    const prompt = `Generate ${count} interview questions for ${role} position.
 
 Required Competencies:
 ${requiredCompetencies.map((c) => `- ${c}`).join("\n")}
 
 Difficulty: ${difficulty}
 
-Return JSON array with:
+Return JSON with "questions" array containing:
 - question: The interview question
 - category: "behavioral", "technical", "situational", or "competency"
 - difficulty: "easy", "medium", or "hard"
@@ -497,40 +693,76 @@ Return JSON array with:
 - evaluationCriteria: What to look for in responses
 - followUpQuestions: 2-3 follow-up questions`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert interviewer for education sector roles. Generate insightful interview questions.",
-          },
-          { role: "user", content: prompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.4,
-      });
+    // Try Together.ai first (FREE)
+    if (this.useTogetherAI) {
+      try {
+        const response = await invokeTogether({
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert interviewer for education sector roles. Generate insightful interview questions.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.4,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error("No response from Together.ai");
+        
+        const result = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
 
-      await auditService.success("ai.analysis", {
-        tenantId,
-        entityType: "interview",
-        details: {
-          action: "generate_questions",
-          role,
-          count: result.questions?.length || 0,
-        },
-      });
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "interview",
+          details: { action: "generate_questions", provider: "together", role, count: result.questions?.length || 0 },
+        });
 
-      return result.questions || [];
-    } catch (error) {
-      console.error("[AI] Interview question generation failed:", error);
-      return this.getMockInterviewQuestions();
+        return result.questions || [];
+      } catch (error) {
+        console.warn("[AI] Together.ai interview question generation failed, trying OpenAI fallback:", error);
+      }
     }
+
+    // Try OpenAI fallback
+    if (openai) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert interviewer for education sector roles. Generate insightful interview questions.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.4,
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "interview",
+          details: { action: "generate_questions", provider: "openai", role, count: result.questions?.length || 0 },
+        });
+
+        return result.questions || [];
+      } catch (error) {
+        console.error("[AI] OpenAI interview question generation also failed:", error);
+      }
+    }
+
+    // Only return mock if ALL providers fail
+    console.error("[AI] All providers failed for interview question generation - returning mock data");
+    return this.getMockInterviewQuestions();
   }
 
   /**
    * Generate job description from requirements
+   * Uses Together.ai first, then OpenAI fallback
    */
   async generateJobDescription(
     role: string,
@@ -539,12 +771,7 @@ Return JSON array with:
     responsibilities: string[],
     tenantId?: number
   ): Promise<string> {
-    if (!openai) {
-      return this.getMockJobDescription(role, department);
-    }
-
-    try {
-      const prompt = `Generate a professional job description for:
+    const prompt = `Generate a professional job description for:
 
 Role: ${role}
 Department: ${department}
@@ -557,32 +784,65 @@ ${responsibilities.map((r) => `- ${r}`).join("\n")}
 
 Create a compelling, inclusive job description suitable for UAE education sector.`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert HR professional specializing in education sector recruitment in the UAE.",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.5,
-      });
+    // Try Together.ai first (FREE)
+    if (this.useTogetherAI) {
+      try {
+        const response = await invokeTogether({
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert HR professional specializing in education sector recruitment in the UAE.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.5,
+        });
 
-      await auditService.success("ai.analysis", {
-        tenantId,
-        entityType: "job",
-        details: {
-          action: "generate_description",
-          role,
-        },
-      });
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error("No response from Together.ai");
 
-      return response.choices[0].message.content || "";
-    } catch (error) {
-      console.error("[AI] Job description generation failed:", error);
-      return this.getMockJobDescription(role, department);
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "job",
+          details: { action: "generate_description", provider: "together", role },
+        });
+
+        return typeof content === 'string' ? content : JSON.stringify(content);
+      } catch (error) {
+        console.warn("[AI] Together.ai job description generation failed, trying OpenAI fallback:", error);
+      }
     }
+
+    // Try OpenAI fallback
+    if (openai) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert HR professional specializing in education sector recruitment in the UAE.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.5,
+        });
+
+        await auditService.success("ai.analysis", {
+          tenantId,
+          entityType: "job",
+          details: { action: "generate_description", provider: "openai", role },
+        });
+
+        return response.choices[0].message.content || "";
+      } catch (error) {
+        console.error("[AI] OpenAI job description generation also failed:", error);
+      }
+    }
+
+    // Only return mock if ALL providers fail
+    console.error("[AI] All providers failed for job description generation - returning mock data");
+    return this.getMockJobDescription(role, department);
   }
 
   // ============================================================================
