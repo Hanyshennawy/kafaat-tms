@@ -579,43 +579,121 @@ Return ONLY valid JSON array of ${count} questions:
 
   /**
    * Generate psychometric questions
+   * Uses SHL/Hogan/Gallup-style assessment design with anti-faking measures
    */
   async generatePsychometricQuestions(
     testType: string,
     dimension: string,
     count: number
   ): Promise<any[]> {
-    const systemPrompt = `You are an expert psychometrician.
-Generate valid psychometric assessment items that:
-- Measure the specified dimension accurately
-- Use appropriate response scales
-- Avoid social desirability bias
-- Include reverse-scored items
+    const safeCount = Math.min(count, 8);
+    
+    const systemPrompt = `You are a senior psychometrician with 20+ years experience at SHL, Hogan, and Gallup.
+You specialize in creating assessment items that:
+- Accurately measure psychological constructs
+- Resist faking and social desirability bias
+- Use realistic scenarios relevant to education professionals
+- Include proper behavioral anchors
 
-Return ONLY valid JSON array of ${count} items:
-[{
-  "question": "string",
-  "dimension": "${dimension}",
-  "type": "likert|forced-choice|situational",
-  "options": ["string"] or scale description,
-  "scoring": "normal|reverse",
-  "weight": number (0-1)
-}]`;
+Return ONLY valid JSON. No markdown code blocks. No explanations.`;
+
+    const userPrompt = `Generate ${safeCount} professional-grade psychometric questions for ${testType} assessment.
+
+ASSESSMENT CONTEXT:
+- Target Population: UAE education professionals (teachers, administrators, counselors)
+- Dimension to Measure: ${dimension}
+- Purpose: Authentic personality/competency assessment with anti-faking measures
+
+CRITICAL REQUIREMENTS (SHL/Hogan Standards):
+
+1. QUESTION TYPES TO USE (MUST vary across these types):
+   - "ipsative": Forced-choice between EQUALLY DESIRABLE options (eliminates social desirability bias)
+   - "situational_judgment": Realistic workplace dilemmas with multiple valid approaches
+   - "behavioral_anchor": Specific observable behaviors rated on a scale
+   - "scenario": Rich context-based questions requiring judgment
+   - "forced_choice": Two options, both moderately desirable
+
+2. ANTI-FAKING MEASURES (MANDATORY):
+   - NO obvious "best" answer - all options should seem reasonable
+   - Options must have SIMILAR social desirability levels
+   - Include subtle behavioral indicators, not stated ideals
+   - Use specific situations, not abstract traits
+   - Avoid leading language like "always", "never", "best"
+
+3. SCENARIO REQUIREMENTS:
+   - Set in UAE school/education context
+   - Include realistic constraints (time, resources, relationships)
+   - Present genuine dilemmas with trade-offs
+   - Focus on OBSERVABLE BEHAVIORS, not intentions
+
+4. OPTION DESIGN:
+   - Each option reveals different personality traits
+   - None should be obviously "wrong" or "right"
+   - Use concrete actions, not vague descriptors
+   - Include traits each option measures
+
+EXAMPLE HIGH-QUALITY QUESTION:
+{
+  "question": "During a staff meeting, a colleague presents an idea you believe has significant flaws. How do you respond?",
+  "type": "situational_judgment",
+  "dimension": "Agreeableness-Assertiveness Balance",
+  "scenario": "The meeting is running long, the principal seems supportive of the idea, and your colleague is known to be sensitive to criticism.",
+  "options": [
+    {"id": "a", "text": "Ask clarifying questions that subtly highlight potential issues without direct criticism", "value": 4, "traits": ["Diplomacy", "Conscientiousness"]},
+    {"id": "b", "text": "Request time to review the proposal and share written feedback privately after the meeting", "value": 4, "traits": ["Conscientiousness", "Introversion"]},
+    {"id": "c", "text": "Acknowledge the idea's strengths, then respectfully voice your specific concerns", "value": 4, "traits": ["Assertiveness", "Openness"]},
+    {"id": "d", "text": "Support the consensus in the meeting and adapt your approach if the plan moves forward", "value": 3, "traits": ["Agreeableness", "Flexibility"]}
+  ]
+}
+
+Return ONLY this exact JSON structure:
+{
+  "questions": [
+    {
+      "question": "Clear, specific question text",
+      "type": "ipsative|situational_judgment|behavioral_anchor|scenario|forced_choice",
+      "dimension": "${dimension}",
+      "scenario": "Detailed realistic scenario with context and constraints",
+      "options": [
+        {"id": "a", "text": "Specific behavioral response", "value": 4, "traits": ["Trait1", "Trait2"]},
+        {"id": "b", "text": "Different but equally valid response", "value": 4, "traits": ["Trait3", "Trait4"]},
+        {"id": "c", "text": "Another reasonable approach", "value": 3, "traits": ["Trait5"]},
+        {"id": "d", "text": "Final option revealing different preferences", "value": 3, "traits": ["Trait6"]}
+      ],
+      "scoring": "normal",
+      "weight": 1.0
+    }
+  ]
+}
+
+Generate exactly ${safeCount} varied, professional questions.`;
 
     const response = await this.chatCompletion({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Generate ${count} psychometric items for:\nTest Type: ${testType}\nDimension: ${dimension}` },
+        { role: 'user', content: userPrompt },
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.6,
-      max_tokens: 3000,
+      temperature: 0.7,
+      max_tokens: 4000,
     });
 
     try {
       const content = response.choices[0].message.content;
       const parsed = JSON.parse(content);
-      return Array.isArray(parsed) ? parsed : (parsed.items || parsed.questions || []);
+      const questions = Array.isArray(parsed) ? parsed : (parsed.items || parsed.questions || []);
+      
+      // Normalize the response format
+      return questions.map((q: any) => ({
+        question: q.question || q.text || '',
+        dimension: q.dimension || dimension,
+        type: q.type || 'scenario',
+        scenario: q.scenario,
+        options: q.options || [],
+        scoring: q.scoring || 'normal',
+        weight: q.weight || 1.0,
+        traits: q.traits,
+      }));
     } catch (e) {
       console.error('[Ollama] Failed to parse psychometric questions:', e);
       throw new Error('Failed to generate psychometric questions: Invalid JSON response');
