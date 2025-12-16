@@ -13,6 +13,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic } from "./static";
 import { trialService } from "../services/trial.service";
+import { runMigrations } from "../db-migrate";
 
 // Application start time for uptime calculation
 const startTime = Date.now();
@@ -37,6 +38,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Run database migrations first
+  await runMigrations();
+  
   const app = express();
   const server = createServer(app);
   
