@@ -12,12 +12,24 @@
  * - AI-powered question generation to replenish bank
  * - Quality scoring and validation
  * - Dimension-based organization
+ * - Advanced anti-faking measures (ipsative, validity checks)
+ * - Response timing analysis
  */
 
 import { eq, and, sql, asc, ne } from "drizzle-orm";
 import { getDb } from "../db";
 import { psychometricQuestions } from "../../drizzle/schema-pg";
 import { aiRouterService } from "./ai-router.service";
+import { 
+  advancedPsychometricService,
+  IPSATIVE_QUESTIONS,
+  SITUATIONAL_JUDGMENT_QUESTIONS,
+  CONDITIONAL_REASONING_QUESTIONS,
+  VALIDITY_CHECK_QUESTIONS,
+  BEHAVIORAL_ANCHOR_QUESTIONS,
+  SEMANTIC_DIFFERENTIAL_QUESTIONS,
+  type AdvancedQuestion
+} from "./advanced-psychometric.service";
 
 // ============================================================================
 // TYPES
@@ -27,7 +39,7 @@ export interface ProfessionalQuestion {
   id?: number;
   testType: string;
   questionText: string;
-  questionType: 'scenario' | 'situational' | 'forced_choice' | 'multiple_choice' | 'likert';
+  questionType: 'scenario' | 'situational' | 'forced_choice' | 'multiple_choice' | 'likert' | 'ipsative' | 'ranking' | 'semantic_differential';
   dimension: string;
   scenario?: string;
   options: QuestionOption[];
@@ -848,39 +860,114 @@ export const PROFESSIONAL_QUESTION_BANK: Record<string, ProfessionalQuestion[]> 
 export class QuestionBankService {
   /**
    * Get available questions for an assessment type
-   * Only returns questions that haven't been used
+   * Returns a mix of question types with anti-faking measures
+   * Minimum 25 questions per assessment
    */
   async getAvailableQuestions(
     testType: string, 
-    count: number = 10,
+    count: number = 25, // Increased default from 10 to 25
     dimensions?: string[]
   ): Promise<ProfessionalQuestion[]> {
     const database = await getDb();
     
+    // Ensure minimum 25 questions for comprehensive assessment
+    const targetCount = Math.max(count, 25);
+    
     // Try to get from database first
     if (database) {
-      const dbQuestions = await database
-        .select()
-        .from(psychometricQuestions)
-        .where(
-          and(
-            eq(psychometricQuestions.status, 'available'),
-            sql`${psychometricQuestions.dimension} LIKE ${testType + '%'} OR ${psychometricQuestions.traitMeasured} LIKE ${testType + '%'}`
+      try {
+        const dbQuestions = await database
+          .select()
+          .from(psychometricQuestions)
+          .where(
+            and(
+              eq(psychometricQuestions.status, 'available'),
+              sql`${psychometricQuestions.dimension} LIKE ${testType + '%'} OR ${psychometricQuestions.traitMeasured} LIKE ${testType + '%'}`
+            )
           )
-        )
-        .limit(count);
+          .limit(targetCount);
 
-      if (dbQuestions.length >= count) {
-        return dbQuestions.map(q => this.mapDbQuestionToQuestion(q));
+        if (dbQuestions.length >= targetCount) {
+          return dbQuestions.map(q => this.mapDbQuestionToQuestion(q));
+        }
+      } catch (error) {
+        console.warn('[QuestionBank] Database query failed, using static questions');
       }
     }
 
-    // Fall back to static question bank
-    const staticQuestions = PROFESSIONAL_QUESTION_BANK[testType] || PROFESSIONAL_QUESTION_BANK['personality'];
+    // Build comprehensive question set from multiple sources
+    const questions: ProfessionalQuestion[] = [];
     
-    // Shuffle and return requested count
-    const shuffled = [...staticQuestions].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
+    // 1. Add questions from PROFESSIONAL_QUESTION_BANK (30%)
+    const staticQuestions = PROFESSIONAL_QUESTION_BANK[testType] || PROFESSIONAL_QUESTION_BANK['personality'];
+    const staticCount = Math.floor(targetCount * 0.30);
+    const shuffledStatic = [...staticQuestions].sort(() => Math.random() - 0.5);
+    questions.push(...shuffledStatic.slice(0, staticCount));
+    
+    // 2. Add advanced ipsative questions for anti-faking (20%)
+    const ipsativeCount = Math.floor(targetCount * 0.20);
+    const mappedIpsative = this.mapAdvancedQuestions(IPSATIVE_QUESTIONS.slice(0, ipsativeCount), testType);
+    questions.push(...mappedIpsative);
+    
+    // 3. Add situational judgment tests (25%)
+    const sjtCount = Math.floor(targetCount * 0.25);
+    const mappedSJT = this.mapAdvancedQuestions(SITUATIONAL_JUDGMENT_QUESTIONS.slice(0, sjtCount), testType);
+    questions.push(...mappedSJT);
+    
+    // 4. Add behavioral anchor questions (15%)
+    const barsCount = Math.floor(targetCount * 0.15);
+    const mappedBARS = this.mapAdvancedQuestions(BEHAVIORAL_ANCHOR_QUESTIONS.slice(0, barsCount), testType);
+    questions.push(...mappedBARS);
+    
+    // 5. Add validity check questions (10% - for detecting faking)
+    const validityCount = Math.floor(targetCount * 0.10);
+    const mappedValidity = this.mapAdvancedQuestions(VALIDITY_CHECK_QUESTIONS.slice(0, validityCount), testType);
+    questions.push(...mappedValidity);
+    
+    // Shuffle all questions to prevent pattern recognition
+    const shuffled = [...questions].sort(() => Math.random() - 0.5);
+    
+    console.log(`[QuestionBank] Prepared ${shuffled.length} questions for ${testType} assessment`);
+    return shuffled.slice(0, targetCount);
+  }
+
+  /**
+   * Map advanced questions to the standard ProfessionalQuestion format
+   */
+  private mapAdvancedQuestions(advancedQuestions: AdvancedQuestion[], testType: string): ProfessionalQuestion[] {
+    return advancedQuestions.map((aq, idx) => ({
+      id: 10000 + idx, // High ID to distinguish from DB questions
+      testType: testType,
+      questionText: aq.text,
+      questionType: this.mapAdvancedType(aq.type),
+      dimension: aq.dimension,
+      scenario: aq.scenario,
+      options: aq.options.map(opt => ({
+        id: opt.id,
+        text: opt.text,
+        value: opt.traits[0]?.score || 3,
+      })),
+      traitMeasured: aq.subdimension || aq.dimension,
+      isReverseCoded: aq.isReverseCoded,
+      qualityScore: 9, // Advanced questions are high quality
+    }));
+  }
+
+  /**
+   * Map advanced question types to standard types
+   */
+  private mapAdvancedType(type: AdvancedQuestion['type']): ProfessionalQuestion['questionType'] {
+    const typeMap: Record<string, ProfessionalQuestion['questionType']> = {
+      'ipsative_pair': 'ipsative',
+      'ipsative_quad': 'ipsative',
+      'situational_judgment': 'situational',
+      'behavioral_anchor': 'scenario',
+      'ranking': 'ranking',
+      'semantic_differential': 'semantic_differential',
+      'conditional_reasoning': 'scenario',
+      'integrity_check': 'multiple_choice',
+    };
+    return typeMap[type] || 'multiple_choice';
   }
 
   /**
@@ -890,7 +977,10 @@ export class QuestionBankService {
     const database = await getDb();
     if (!database) return;
 
-    for (const id of questionIds) {
+    // Only mark DB questions (id < 10000)
+    const dbIds = questionIds.filter(id => id < 10000);
+    
+    for (const id of dbIds) {
       await database
         .update(psychometricQuestions)
         .set({
@@ -902,7 +992,9 @@ export class QuestionBankService {
     }
 
     // Trigger AI replenishment in background
-    this.replenishQuestionBank(questionIds.length).catch(console.error);
+    if (dbIds.length > 0) {
+      this.replenishQuestionBank(dbIds.length).catch(console.error);
+    }
   }
 
   /**

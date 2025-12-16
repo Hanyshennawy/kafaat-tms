@@ -462,3 +462,202 @@ export const demoPsychometricAssessments = [
     status: "active" as const,
   },
 ];
+
+// ============================================================================
+// DEMO DATA: LICENSE TYPES
+// ============================================================================
+
+export const demoLicenseTypes = [
+  {
+    id: 1,
+    code: "TEL",
+    name: "Teacher of English Language",
+    description: "Professional teaching license for English language educators in UAE schools. Covers reading, writing, speaking and listening instruction.",
+    category: "teaching" as const,
+    level: "standard" as const,
+    requirements: "Bachelor's degree in English or Education, TESOL/TEFL certification preferred, minimum 2 years teaching experience",
+    validityPeriod: 36, // months
+    renewalRequirements: "50 CPD hours, satisfactory performance reviews",
+    minExperience: 2,
+    minQualification: "bachelors",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 3,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: 2,
+    code: "TMS",
+    name: "Teacher of Mathematics & Sciences",
+    description: "License for educators teaching Mathematics, Physics, Chemistry, or Biology at secondary level. Includes STEM integration certification.",
+    category: "teaching" as const,
+    level: "standard" as const,
+    requirements: "Bachelor's degree in relevant science field, Teaching qualification, Strong numerical and analytical skills",
+    validityPeriod: 36,
+    renewalRequirements: "60 CPD hours including STEM workshops",
+    minExperience: 2,
+    minQualification: "bachelors",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 4,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: 3,
+    code: "TPE",
+    name: "Primary Educator License",
+    description: "Generalist teaching license for primary school educators (Grades 1-5). Covers multiple subject areas and child development.",
+    category: "teaching" as const,
+    level: "foundation" as const,
+    requirements: "Bachelor's degree in Primary Education or Child Development, Classroom management training",
+    validityPeriod: 36,
+    renewalRequirements: "40 CPD hours, classroom observations",
+    minExperience: 1,
+    minQualification: "bachelors",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 3,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: 4,
+    code: "TAR",
+    name: "Teacher of Arabic Language",
+    description: "License for teaching Arabic as a first language or second language to native and non-native speakers in UAE schools.",
+    category: "teaching" as const,
+    level: "standard" as const,
+    requirements: "Bachelor's degree in Arabic Language or Literature, Teaching certification, Native-level Arabic proficiency",
+    validityPeriod: 36,
+    renewalRequirements: "50 CPD hours in Arabic pedagogy",
+    minExperience: 2,
+    minQualification: "bachelors",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 3,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: 5,
+    code: "TIS",
+    name: "Teacher of Islamic Studies",
+    description: "Professional license for educators teaching Islamic Studies, Quran, and Islamic values education.",
+    category: "teaching" as const,
+    level: "standard" as const,
+    requirements: "Bachelor's degree in Islamic Studies or Sharia, Teaching certification, Ijazah in Quran (preferred)",
+    validityPeriod: 36,
+    renewalRequirements: "50 CPD hours in Islamic pedagogy",
+    minExperience: 2,
+    minQualification: "bachelors",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 3,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: 6,
+    code: "SPL",
+    name: "School Principal License",
+    description: "Leadership license for school principals and vice principals. Covers school administration, strategic planning, and educational leadership.",
+    category: "leadership" as const,
+    level: "advanced" as const,
+    requirements: "Master's degree in Educational Leadership, 5+ years teaching experience, 2+ years in leadership role",
+    validityPeriod: 48,
+    renewalRequirements: "80 CPD hours in leadership, successful school inspection",
+    minExperience: 7,
+    minQualification: "masters",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 5,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: 7,
+    code: "SEN",
+    name: "Special Educational Needs Specialist",
+    description: "Specialist license for educators working with students with special educational needs and disabilities (SEND).",
+    category: "specialist" as const,
+    level: "advanced" as const,
+    requirements: "Bachelor's in Special Education, SEND certification, Experience with IEP development",
+    validityPeriod: 36,
+    renewalRequirements: "60 CPD hours in SEND practices",
+    minExperience: 3,
+    minQualification: "bachelors",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 4,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: 8,
+    code: "GCL",
+    name: "Guidance Counselor License",
+    description: "License for school counselors providing academic, career, and personal guidance to students.",
+    category: "specialist" as const,
+    level: "standard" as const,
+    requirements: "Master's in Counseling Psychology or School Counseling, Clinical supervision hours",
+    validityPeriod: 36,
+    renewalRequirements: "50 CPD hours, supervision documentation",
+    minExperience: 2,
+    minQualification: "masters",
+    status: "active" as const,
+    examRequired: true,
+    coursesRequired: 3,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+];
+
+// ============================================================================
+// DEMO DATA: LICENSE TIERS (Progression levels within each license type)
+// ============================================================================
+
+export const demoLicenseTiers = [
+  // English Language Teacher Tiers
+  { id: 1, licenseTypeId: 1, tierLevel: 1, name: "Probationary Teacher", description: "Initial tier for new teachers", requiredCPDHours: 20, requiredExperience: 0, assessmentRequired: true },
+  { id: 2, licenseTypeId: 1, tierLevel: 2, name: "Licensed Teacher", description: "Full teaching license", requiredCPDHours: 40, requiredExperience: 2, assessmentRequired: true },
+  { id: 3, licenseTypeId: 1, tierLevel: 3, name: "Experienced Teacher", description: "Demonstrated excellence", requiredCPDHours: 60, requiredExperience: 5, assessmentRequired: true },
+  { id: 4, licenseTypeId: 1, tierLevel: 4, name: "Expert Teacher", description: "Subject matter expert", requiredCPDHours: 80, requiredExperience: 10, assessmentRequired: true },
+  
+  // Math & Sciences Teacher Tiers
+  { id: 5, licenseTypeId: 2, tierLevel: 1, name: "Probationary Teacher", description: "Initial tier for new teachers", requiredCPDHours: 20, requiredExperience: 0, assessmentRequired: true },
+  { id: 6, licenseTypeId: 2, tierLevel: 2, name: "Licensed Teacher", description: "Full teaching license", requiredCPDHours: 40, requiredExperience: 2, assessmentRequired: true },
+  { id: 7, licenseTypeId: 2, tierLevel: 3, name: "Experienced Teacher", description: "Demonstrated excellence", requiredCPDHours: 60, requiredExperience: 5, assessmentRequired: true },
+  { id: 8, licenseTypeId: 2, tierLevel: 4, name: "Expert Teacher", description: "Subject matter expert", requiredCPDHours: 80, requiredExperience: 10, assessmentRequired: true },
+  
+  // Primary Educator Tiers
+  { id: 9, licenseTypeId: 3, tierLevel: 1, name: "Probationary Educator", description: "Initial tier for new primary educators", requiredCPDHours: 15, requiredExperience: 0, assessmentRequired: true },
+  { id: 10, licenseTypeId: 3, tierLevel: 2, name: "Licensed Educator", description: "Full primary license", requiredCPDHours: 30, requiredExperience: 2, assessmentRequired: true },
+  { id: 11, licenseTypeId: 3, tierLevel: 3, name: "Senior Educator", description: "Experienced primary teacher", requiredCPDHours: 50, requiredExperience: 5, assessmentRequired: true },
+  
+  // Arabic Language Teacher Tiers
+  { id: 12, licenseTypeId: 4, tierLevel: 1, name: "Probationary Teacher", description: "Initial tier", requiredCPDHours: 20, requiredExperience: 0, assessmentRequired: true },
+  { id: 13, licenseTypeId: 4, tierLevel: 2, name: "Licensed Teacher", description: "Full teaching license", requiredCPDHours: 40, requiredExperience: 2, assessmentRequired: true },
+  { id: 14, licenseTypeId: 4, tierLevel: 3, name: "Master Teacher", description: "Expert level", requiredCPDHours: 60, requiredExperience: 7, assessmentRequired: true },
+  
+  // Islamic Studies Teacher Tiers  
+  { id: 15, licenseTypeId: 5, tierLevel: 1, name: "Probationary Teacher", description: "Initial tier", requiredCPDHours: 20, requiredExperience: 0, assessmentRequired: true },
+  { id: 16, licenseTypeId: 5, tierLevel: 2, name: "Licensed Teacher", description: "Full teaching license", requiredCPDHours: 40, requiredExperience: 2, assessmentRequired: true },
+  { id: 17, licenseTypeId: 5, tierLevel: 3, name: "Master Teacher", description: "Expert level", requiredCPDHours: 60, requiredExperience: 7, assessmentRequired: true },
+  
+  // School Principal Tiers
+  { id: 18, licenseTypeId: 6, tierLevel: 1, name: "Assistant Principal", description: "Entry leadership role", requiredCPDHours: 40, requiredExperience: 5, assessmentRequired: true },
+  { id: 19, licenseTypeId: 6, tierLevel: 2, name: "Vice Principal", description: "Senior leadership", requiredCPDHours: 60, requiredExperience: 7, assessmentRequired: true },
+  { id: 20, licenseTypeId: 6, tierLevel: 3, name: "Principal", description: "Full principal authority", requiredCPDHours: 80, requiredExperience: 10, assessmentRequired: true },
+  
+  // SEND Specialist Tiers
+  { id: 21, licenseTypeId: 7, tierLevel: 1, name: "SEND Support Teacher", description: "Entry support role", requiredCPDHours: 30, requiredExperience: 1, assessmentRequired: true },
+  { id: 22, licenseTypeId: 7, tierLevel: 2, name: "SEND Specialist", description: "Full specialist role", requiredCPDHours: 50, requiredExperience: 3, assessmentRequired: true },
+  { id: 23, licenseTypeId: 7, tierLevel: 3, name: "SEND Lead", description: "Department leadership", requiredCPDHours: 70, requiredExperience: 6, assessmentRequired: true },
+  
+  // Guidance Counselor Tiers
+  { id: 24, licenseTypeId: 8, tierLevel: 1, name: "Junior Counselor", description: "Supervised practice", requiredCPDHours: 30, requiredExperience: 0, assessmentRequired: true },
+  { id: 25, licenseTypeId: 8, tierLevel: 2, name: "School Counselor", description: "Independent practice", requiredCPDHours: 50, requiredExperience: 2, assessmentRequired: true },
+  { id: 26, licenseTypeId: 8, tierLevel: 3, name: "Senior Counselor", description: "Supervisory role", requiredCPDHours: 70, requiredExperience: 5, assessmentRequired: true },
+];

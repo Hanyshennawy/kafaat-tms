@@ -16,16 +16,18 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
-// Enhanced question type with multiple formats
+// Enhanced question type with multiple formats including anti-faking measures
 interface AssessmentQuestion {
   id: number;
   text: string;
   section: string;
-  type: 'likert' | 'scenario' | 'multiple_choice' | 'forced_choice' | 'situational' | 'ranking';
+  type: 'likert' | 'scenario' | 'multiple_choice' | 'forced_choice' | 'situational' | 'ranking' | 'ipsative' | 'semantic_differential';
   options?: Array<{ id: string | number; text: string; value?: number }>;
   scenario?: string;
   correctAnswer?: number;
   explanation?: string;
+  instructions?: string;
+  isValidityCheck?: boolean;
 }
 
 // Assessment type definitions
@@ -458,16 +460,18 @@ export default function TakeAssessment() {
   
   const config = assessmentConfigs[assessmentType] || assessmentConfigs.personality;
   
-  // State for AI-generated questions
+  // State for AI-generated questions - supports all advanced question types
   const [questions, setQuestions] = useState<Array<{ 
     id: number; 
     text: string; 
     section: string;
-    type?: 'likert' | 'multiple_choice' | 'forced_choice' | 'situational' | 'scenario';
+    type?: 'likert' | 'multiple_choice' | 'forced_choice' | 'situational' | 'scenario' | 'ipsative' | 'ranking' | 'semantic_differential';
     scenario?: string;
     options?: Array<{ id: string; text: string; value: number }>;
     correctAnswer?: number;
     explanation?: string;
+    instructions?: string;
+    isValidityCheck?: boolean;
   }>>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -981,19 +985,48 @@ export default function TakeAssessment() {
                   <Badge variant="outline" className={`text-xs ${
                     currentQ?.type === 'scenario' || currentQ?.type === 'situational' 
                       ? 'bg-purple-50 text-purple-700 border-purple-200' 
-                      : currentQ?.type === 'forced_choice' 
+                      : currentQ?.type === 'forced_choice' || currentQ?.type === 'ipsative'
                         ? 'bg-orange-50 text-orange-700 border-orange-200'
                         : currentQ?.type === 'multiple_choice'
                           ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : currentQ?.type === 'ranking'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : currentQ?.type === 'semantic_differential'
+                          ? 'bg-teal-50 text-teal-700 border-teal-200'
                           : 'bg-green-50 text-green-700 border-green-200'
                   }`}>
                     {currentQ?.type === 'scenario' ? '📋 Scenario' 
                       : currentQ?.type === 'situational' ? '🎯 Situational Judgment'
                       : currentQ?.type === 'forced_choice' ? '⚖️ Choose One'
+                      : currentQ?.type === 'ipsative' ? '🔄 Choose Most & Least Like You'
                       : currentQ?.type === 'multiple_choice' ? '📝 Multiple Choice'
+                      : currentQ?.type === 'ranking' ? '📊 Rank Options'
+                      : currentQ?.type === 'semantic_differential' ? '↔️ Rate on Scale'
                       : '📊 Rating Scale'}
                   </Badge>
+                  {currentQ?.isValidityCheck && (
+                    <Badge variant="secondary" className="text-xs bg-gray-100">
+                      Verification
+                    </Badge>
+                  )}
                 </div>
+
+                {/* Instructions for special question types */}
+                {currentQ?.type === 'ipsative' && (
+                  <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                        <Scale className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-orange-800 mb-1">Instructions</p>
+                        <p className="text-sm text-orange-700">
+                          {currentQ?.instructions || "All options describe positive qualities. Select the one that is MOST like you. There are no wrong answers."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Scenario Description (for scenario/situational questions) */}
                 {(currentQ?.type === 'scenario' || currentQ?.type === 'situational') && currentQ?.scenario && (

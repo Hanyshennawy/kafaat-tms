@@ -573,26 +573,68 @@ export async function getPerformanceRatings(employeeId: number, cycleId: number)
 
 export async function getAllLicenseTypes() {
   const db = await getDb();
-  if (!db) return [
-    { id: 1, name: "Primary School Teacher", description: "License for teaching primary grades", requirements: "Bachelor's degree in Education" },
-    { id: 2, name: "Secondary School Teacher", description: "License for teaching secondary grades", requirements: "Bachelor's degree + teaching certification" },
-  ];
-  return db.select().from(licenseTypes).orderBy(licenseTypes.name);
+  if (!db) {
+    // Return comprehensive demo license types
+    return demoData.demoLicenseTypes;
+  }
+  try {
+    const result = await db.select().from(licenseTypes).orderBy(licenseTypes.name);
+    // If no license types in DB, return demo data
+    if (result.length === 0) {
+      return demoData.demoLicenseTypes;
+    }
+    return result;
+  } catch (error) {
+    console.warn("[Database] Query failed for license types, returning demo data");
+    markDbDisconnected();
+    return demoData.demoLicenseTypes;
+  }
 }
 
 export async function getLicenseTypeById(id: number) {
   const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(licenseTypes).where(eq(licenseTypes.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  if (!db) {
+    // Return from demo data
+    return demoData.demoLicenseTypes.find((lt: any) => lt.id === id);
+  }
+  try {
+    const result = await db.select().from(licenseTypes).where(eq(licenseTypes.id, id)).limit(1);
+    if (result.length > 0) return result[0];
+    // Fallback to demo data if not found in DB
+    return demoData.demoLicenseTypes.find((lt: any) => lt.id === id);
+  } catch (error) {
+    console.warn("[Database] Query failed for license type by ID, returning demo data");
+    markDbDisconnected();
+    return demoData.demoLicenseTypes.find((lt: any) => lt.id === id);
+  }
 }
 
 export async function getLicenseTiers(licenseTypeId: number) {
   const db = await getDb();
-  if (!db) return [];
-  return db.select().from(licenseTiers)
-    .where(eq(licenseTiers.licenseTypeId, licenseTypeId))
-    .orderBy(licenseTiers.tierLevel);
+  if (!db) {
+    // Return demo license tiers for the given license type
+    return demoData.demoLicenseTiers
+      .filter((t: any) => t.licenseTypeId === licenseTypeId)
+      .sort((a: any, b: any) => a.tierLevel - b.tierLevel);
+  }
+  try {
+    const result = await db.select().from(licenseTiers)
+      .where(eq(licenseTiers.licenseTypeId, licenseTypeId))
+      .orderBy(licenseTiers.tierLevel);
+    // If no tiers found in DB, return demo data
+    if (result.length === 0) {
+      return demoData.demoLicenseTiers
+        .filter((t: any) => t.licenseTypeId === licenseTypeId)
+        .sort((a: any, b: any) => a.tierLevel - b.tierLevel);
+    }
+    return result;
+  } catch (error) {
+    console.warn("[Database] Query failed for license tiers, returning demo data");
+    markDbDisconnected();
+    return demoData.demoLicenseTiers
+      .filter((t: any) => t.licenseTypeId === licenseTypeId)
+      .sort((a: any, b: any) => a.tierLevel - b.tierLevel);
+  }
 }
 
 export async function getAllLicenseApplications() {
