@@ -114,6 +114,8 @@ import GamificationDashboard from "./pages/GamificationDashboard";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 import IntegrationsSettings from "./pages/admin/IntegrationsSettings";
 import RBACManagement from "./pages/admin/RBACManagement";
+import AIConfiguration from "./pages/admin/AIConfiguration";
+import AssessmentBuilder from "./pages/assessments/AssessmentBuilder";
 
 // Marketplace & SaaS
 import MarketplaceCatalog from "./pages/MarketplaceCatalog";
@@ -406,6 +408,16 @@ function Router() {
       <Route path="/admin/questions/new" component={QuestionForm} />
       <Route path="/admin/questions/edit/:id" component={QuestionForm} />
       <Route path="/admin/qms-analytics" component={QMSAnalytics} />
+      <Route path="/admin/ai-configuration">
+        <DashboardLayout>
+          <AIConfiguration />
+        </DashboardLayout>
+      </Route>
+      <Route path="/admin/assessment-builder">
+        <DashboardLayout>
+          <AssessmentBuilder />
+        </DashboardLayout>
+      </Route>
       <Route path="/admin/rbac">
         <DashboardLayout>
           <RBACManagement />

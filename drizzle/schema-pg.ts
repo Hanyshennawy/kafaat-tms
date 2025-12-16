@@ -1658,6 +1658,341 @@ export const saasApplications = pgTable("saas_applications", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============================================================================
+// AI CONFIGURATION & KNOWLEDGE BASE SYSTEM
+// ============================================================================
+
+// Enums for AI configuration
+export const aiModelProviderEnum = pgEnum("ai_model_provider", ["together", "openai", "ollama", "anthropic"]);
+export const aiConfigStatusEnum = pgEnum("ai_config_status", ["active", "inactive", "draft"]);
+export const knowledgeBaseTypeEnum = pgEnum("knowledge_base_type", ["competency_framework", "psychometric_methodology", "assessment_rubric", "question_template", "custom"]);
+export const assessmentFrameworkTypeEnum = pgEnum("assessment_framework_type", ["big_five", "hogan", "disc", "mbti", "eq", "shl", "gallup", "custom"]);
+export const questionTypeAdvancedEnum = pgEnum("question_type_advanced", [
+  "mcq", "true_false", "likert", "rating_scale", "scenario", "forced_choice", 
+  "ranking", "matching", "fill_blank", "short_answer", "essay", "open_ended",
+  "situational_judgment", "ipsative_pair", "ipsative_quad", "semantic_differential",
+  "behavioral_anchor", "conditional_reasoning", "case_study", "video_response"
+]);
+export const assessmentCategoryEnum = pgEnum("assessment_category", ["psychometric", "competency", "cognitive", "skills", "behavioral", "leadership", "custom"]);
+
+/**
+ * AI Configuration - Stores customizable AI settings
+ */
+export const aiConfigurations = pgTable("ai_configurations", {
+  id: serial("id").primaryKey(),
+  
+  // Configuration identification
+  name: varchar("name", { length: 255 }).notNull(),
+  configType: varchar("config_type", { length: 100 }).notNull(), // e.g., "psychometric_generation", "competency_generation"
+  
+  // Model settings
+  modelProvider: aiModelProviderEnum("model_provider").default("together").notNull(),
+  modelName: varchar("model_name", { length: 255 }).notNull(),
+  temperature: numeric("temperature", { precision: 3, scale: 2 }).default("0.7"),
+  maxTokens: integer("max_tokens").default(4096),
+  topP: numeric("top_p", { precision: 3, scale: 2 }).default("0.9"),
+  
+  // System prompt and instructions
+  systemPrompt: text("system_prompt").notNull(),
+  contextInstructions: text("context_instructions"),
+  outputFormat: text("output_format"), // JSON schema for structured output
+  
+  // Fine-tuning parameters
+  qualityThreshold: integer("quality_threshold").default(7), // 1-10
+  diversityWeight: numeric("diversity_weight", { precision: 3, scale: 2 }).default("0.5"),
+  difficultyCalibration: text("difficulty_calibration"), // JSON mapping
+  
+  // Status
+  status: aiConfigStatusEnum("status").default("active").notNull(),
+  isDefault: boolean("is_default").default(false),
+  
+  // Metadata
+  createdBy: integer("created_by"),
+  tenantId: integer("tenant_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Knowledge Base - Stores domain knowledge for AI context
+ */
+export const knowledgeBase = pgTable("knowledge_base", {
+  id: serial("id").primaryKey(),
+  
+  // Knowledge identification
+  name: varchar("name", { length: 255 }).notNull(),
+  knowledgeType: knowledgeBaseTypeEnum("knowledge_type").notNull(),
+  category: varchar("category", { length: 100 }),
+  
+  // Content
+  content: text("content").notNull(), // Main knowledge content
+  structuredData: json("structured_data"), // JSON for structured knowledge
+  embedding: text("embedding"), // Vector embedding for semantic search
+  
+  // Metadata
+  source: varchar("source", { length: 255 }),
+  version: varchar("version", { length: 50 }),
+  language: varchar("language", { length: 10 }).default("en"),
+  
+  // Status
+  status: aiConfigStatusEnum("status").default("active").notNull(),
+  priority: integer("priority").default(0), // Higher = used first
+  
+  // Tracking
+  usageCount: integer("usage_count").default(0),
+  lastUsedAt: timestamp("last_used_at"),
+  
+  // Ownership
+  createdBy: integer("created_by"),
+  tenantId: integer("tenant_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Assessment Frameworks - Stores psychometric and competency frameworks
+ */
+export const assessmentFrameworks = pgTable("assessment_frameworks_config", {
+  id: serial("id").primaryKey(),
+  
+  // Framework identification
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 64 }).notNull().unique(),
+  frameworkType: assessmentFrameworkTypeEnum("framework_type").notNull(),
+  category: assessmentCategoryEnum("category").notNull(),
+  
+  // Description
+  description: text("description"),
+  methodology: text("methodology"),
+  
+  // Dimensions/Traits configuration
+  dimensions: json("dimensions"), // Array of {name, description, weight, subdimensions}
+  scoringRules: json("scoring_rules"), // Scoring methodology
+  normativeData: json("normative_data"), // Population norms for comparison
+  
+  // Question generation settings
+  questionTypes: json("question_types"), // Allowed question types
+  aiConfigId: integer("ai_config_id"), // Links to AI configuration
+  promptTemplate: text("prompt_template"), // Template for generating questions
+  exampleQuestions: text("example_questions"), // Few-shot examples
+  
+  // Validity and reliability
+  validityIndicators: json("validity_indicators"),
+  reliabilityMetrics: json("reliability_metrics"),
+  antiFakingMeasures: json("anti_faking_measures"),
+  
+  // Status
+  status: aiConfigStatusEnum("status").default("active").notNull(),
+  isBuiltIn: boolean("is_built_in").default(false),
+  
+  // Ownership
+  createdBy: integer("created_by"),
+  tenantId: integer("tenant_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Question Templates - Reusable question patterns for AI generation
+ */
+export const questionTemplates = pgTable("question_templates", {
+  id: serial("id").primaryKey(),
+  
+  // Template identification
+  name: varchar("name", { length: 255 }).notNull(),
+  questionType: questionTypeAdvancedEnum("question_type").notNull(),
+  category: assessmentCategoryEnum("category").notNull(),
+  
+  // Template structure
+  templateText: text("template_text").notNull(), // With placeholders like {{competency}}, {{scenario}}
+  optionsTemplate: json("options_template"), // Template for answer options
+  scoringTemplate: json("scoring_template"), // How to score responses
+  
+  // Guidance for AI
+  instructions: text("instructions"),
+  examples: text("examples"),
+  constraints: json("constraints"), // Constraints for generation
+  
+  // Metadata
+  difficulty: varchar("difficulty", { length: 50 }),
+  estimatedTime: integer("estimated_time"), // seconds
+  tags: json("tags"),
+  
+  // Status
+  status: aiConfigStatusEnum("status").default("active").notNull(),
+  usageCount: integer("usage_count").default(0),
+  
+  // Ownership
+  createdBy: integer("created_by"),
+  tenantId: integer("tenant_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Assessment Builder - Full assessment configuration
+ */
+export const assessmentBuilder = pgTable("assessment_builder", {
+  id: serial("id").primaryKey(),
+  
+  // Assessment identification
+  title: varchar("title", { length: 255 }).notNull(),
+  code: varchar("code", { length: 64 }).notNull(),
+  category: assessmentCategoryEnum("category").notNull(),
+  
+  // Description
+  description: text("description"),
+  instructions: text("instructions"),
+  
+  // Configuration
+  frameworkId: integer("framework_id"),
+  aiConfigId: integer("ai_config_id"),
+  
+  // Sections configuration
+  sections: json("sections"), // Array of {name, questionCount, questionTypes, aiGenerated, manualQuestions}
+  
+  // Timing
+  totalDuration: integer("total_duration"), // minutes, null = no limit
+  sectionTimeLimits: json("section_time_limits"),
+  
+  // Question settings
+  totalQuestions: integer("total_questions").notNull(),
+  questionDistribution: json("question_distribution"), // By type, difficulty, dimension
+  randomization: json("randomization"), // {shuffleQuestions, shuffleOptions, questionPool}
+  
+  // Proctoring
+  proctorSettings: json("proctor_settings"), // {webcamRequired, screenShare, tabSwitch}
+  
+  // Scoring
+  scoringMethod: varchar("scoring_method", { length: 50 }),
+  passingScore: integer("passing_score"),
+  weightingScheme: json("weighting_scheme"),
+  
+  // Results
+  showResults: boolean("show_results").default(true),
+  showCorrectAnswers: boolean("show_correct_answers").default(false),
+  generateReport: boolean("generate_report").default(true),
+  
+  // Scheduling
+  availableFrom: timestamp("available_from"),
+  availableUntil: timestamp("available_until"),
+  maxAttempts: integer("max_attempts").default(1),
+  
+  // Status
+  status: varchar("status", { length: 50 }).default("draft"),
+  publishedAt: timestamp("published_at"),
+  
+  // Ownership
+  createdBy: integer("created_by"),
+  tenantId: integer("tenant_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Generated Questions Bank - Stores AI-generated questions
+ */
+export const generatedQuestionsBank = pgTable("generated_questions_bank", {
+  id: serial("id").primaryKey(),
+  
+  // Question content
+  questionType: questionTypeAdvancedEnum("question_type").notNull(),
+  questionText: text("question_text").notNull(),
+  scenario: text("scenario"),
+  instructions: text("instructions"),
+  
+  // Options and scoring
+  options: json("options"), // Array of {id, text, value, traits, isCorrect}
+  correctAnswer: text("correct_answer"),
+  explanation: text("explanation"),
+  scoringKey: json("scoring_key"),
+  
+  // Classification
+  category: assessmentCategoryEnum("category").notNull(),
+  frameworkId: integer("framework_id"),
+  dimension: varchar("dimension", { length: 100 }),
+  subdimension: varchar("subdimension", { length: 100 }),
+  traitMeasured: varchar("trait_measured", { length: 100 }),
+  
+  // Difficulty and metadata
+  difficulty: varchar("difficulty", { length: 50 }),
+  estimatedTime: integer("estimated_time"),
+  points: integer("points").default(1),
+  tags: json("tags"),
+  
+  // AI generation metadata
+  aiConfigId: integer("ai_config_id"),
+  generationPrompt: text("generation_prompt"),
+  modelUsed: varchar("model_used", { length: 255 }),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  
+  // Quality control
+  qualityScore: integer("quality_score"), // 1-10
+  reviewStatus: varchar("review_status", { length: 50 }).default("pending"),
+  reviewedBy: integer("reviewed_by"),
+  reviewNotes: text("review_notes"),
+  
+  // Anti-faking measures
+  isValidityCheck: boolean("is_validity_check").default(false),
+  isReverseCoded: boolean("is_reverse_coded").default(false),
+  pairedWithId: integer("paired_with_id"),
+  
+  // Usage tracking
+  usageCount: integer("usage_count").default(0),
+  lastUsedAt: timestamp("last_used_at"),
+  status: varchar("status", { length: 50 }).default("available"),
+  
+  // Ownership
+  createdBy: integer("created_by"),
+  tenantId: integer("tenant_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Assessment Question Links - Links questions to assessments
+ */
+export const assessmentQuestionLinks = pgTable("assessment_question_links", {
+  id: serial("id").primaryKey(),
+  assessmentId: integer("assessment_id").notNull(),
+  questionId: integer("question_id").notNull(),
+  sectionIndex: integer("section_index").default(0),
+  orderIndex: integer("order_index").notNull(),
+  isRequired: boolean("is_required").default(true),
+  weight: numeric("weight", { precision: 3, scale: 2 }).default("1.0"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * AI Generation Logs - Track AI usage for optimization
+ */
+export const aiGenerationLogs = pgTable("ai_generation_logs", {
+  id: serial("id").primaryKey(),
+  
+  // Request details
+  requestType: varchar("request_type", { length: 100 }).notNull(),
+  configId: integer("config_id"),
+  promptUsed: text("prompt_used"),
+  
+  // Response
+  responseContent: text("response_content"),
+  questionsGenerated: integer("questions_generated"),
+  tokensUsed: integer("tokens_used"),
+  
+  // Performance
+  responseTimeMs: integer("response_time_ms"),
+  modelUsed: varchar("model_used", { length: 255 }),
+  
+  // Status
+  success: boolean("success").notNull(),
+  errorMessage: text("error_message"),
+  
+  // Ownership
+  userId: integer("user_id"),
+  tenantId: integer("tenant_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Multi-Tenant Type Exports
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
@@ -1674,3 +2009,17 @@ export type DataConsentRecord = typeof dataConsentRecords.$inferSelect;
 export type DataRetentionPolicy = typeof dataRetentionPolicies.$inferSelect;
 export type DataSubjectRequest = typeof dataSubjectRequests.$inferSelect;
 export type SaasApplication = typeof saasApplications.$inferSelect;
+
+// AI Configuration Type Exports
+export type AIConfiguration = typeof aiConfigurations.$inferSelect;
+export type InsertAIConfiguration = typeof aiConfigurations.$inferInsert;
+export type KnowledgeBase = typeof knowledgeBase.$inferSelect;
+export type InsertKnowledgeBase = typeof knowledgeBase.$inferInsert;
+export type AssessmentFramework = typeof assessmentFrameworks.$inferSelect;
+export type InsertAssessmentFramework = typeof assessmentFrameworks.$inferInsert;
+export type QuestionTemplate = typeof questionTemplates.$inferSelect;
+export type InsertQuestionTemplate = typeof questionTemplates.$inferInsert;
+export type AssessmentBuilderType = typeof assessmentBuilder.$inferSelect;
+export type InsertAssessmentBuilder = typeof assessmentBuilder.$inferInsert;
+export type GeneratedQuestion = typeof generatedQuestionsBank.$inferSelect;
+export type InsertGeneratedQuestion = typeof generatedQuestionsBank.$inferInsert;

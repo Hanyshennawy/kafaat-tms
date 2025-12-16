@@ -11,6 +11,8 @@ import { servicesRouter } from "./routers/services";
 import { catalogRouter } from "./catalog/catalog.service";
 import { integrationsRouter } from "./routers/integrations";
 import { aiInterviewRouter } from "./routers/aiInterview";
+import { aiConfigRouter } from "./routers/aiConfig";
+import { assessmentBuilderRouter } from "./routers/assessmentBuilder";
 // import { qmsRouter } from "./routers/qms"; // Temporarily disabled due to TypeScript caching issue
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import * as db from "./db";
@@ -1771,6 +1773,12 @@ export const appRouter = router({
   
   // AI Interview Simulation
   aiInterview: aiInterviewRouter,
+  
+  // AI Configuration & Question Generation
+  aiConfig: aiConfigRouter,
+  
+  // Assessment Builder
+  assessmentBuilder: assessmentBuilderRouter,
 });
 
 export type AppRouter = typeof appRouter;
