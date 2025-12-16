@@ -1,6 +1,7 @@
 # =============================================================================
 # KAFAAT 1.0 - PRODUCTION DOCKERFILE
 # Multi-stage build for optimized production image
+# Cache bust: v2 - 2025-12-16 - Raw SQL migrations, no drizzle-kit
 # =============================================================================
 
 # Stage 1: Build
