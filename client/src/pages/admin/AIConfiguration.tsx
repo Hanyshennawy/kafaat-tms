@@ -30,7 +30,7 @@ import {
   BookOpen, Code, Wand2, Upload, Download, Search, Filter, BarChart3
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ============================================================================
 // TYPES
@@ -55,7 +55,6 @@ interface AIConfig {
 
 export default function AIConfigurationPage() {
   const [activeTab, setActiveTab] = useState("configurations");
-  const { toast } = useToast();
 
   return (
     <div className="container py-8">
@@ -136,19 +135,18 @@ export default function AIConfigurationPage() {
 function AIConfigurationsTab() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingConfig, setEditingConfig] = useState<AIConfig | null>(null);
-  const { toast } = useToast();
   
   const { data: configurations = [], refetch, isLoading } = trpc.aiConfig.getAllConfigurations.useQuery();
   const createMutation = trpc.aiConfig.createConfiguration.useMutation({
     onSuccess: () => {
-      toast({ title: "Configuration created successfully" });
+      toast.success("Configuration created successfully");
       refetch();
       setShowCreateDialog(false);
     }
   });
   const deleteMutation = trpc.aiConfig.deleteConfiguration.useMutation({
     onSuccess: () => {
-      toast({ title: "Configuration deleted" });
+      toast.success("Configuration deleted");
       refetch();
     }
   });
@@ -513,19 +511,18 @@ Your questions must:
 
 function KnowledgeBaseTab() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const { toast } = useToast();
   
   const { data: knowledgeItems = [], refetch, isLoading } = trpc.aiConfig.getAllKnowledgeBase.useQuery();
   const createMutation = trpc.aiConfig.createKnowledgeBase.useMutation({
     onSuccess: () => {
-      toast({ title: "Knowledge base entry created" });
+      toast.success("Knowledge base entry created");
       refetch();
       setShowCreateDialog(false);
     }
   });
   const deleteMutation = trpc.aiConfig.deleteKnowledgeBase.useMutation({
     onSuccess: () => {
-      toast({ title: "Entry deleted" });
+      toast.success("Entry deleted");
       refetch();
     }
   });
@@ -900,7 +897,6 @@ function TemplatesTab() {
 // ============================================================================
 
 function QuestionGenerationTab() {
-  const { toast } = useToast();
   const [generationConfig, setGenerationConfig] = useState({
     category: "psychometric" as const,
     frameworkCode: "big_five",
@@ -917,17 +913,10 @@ function QuestionGenerationTab() {
   const generateMutation = trpc.aiConfig.generateQuestions.useMutation({
     onSuccess: (data) => {
       setGeneratedQuestions(data.questions);
-      toast({ 
-        title: "Questions Generated!", 
-        description: `Successfully generated ${data.count} questions` 
-      });
+      toast.success(`Questions Generated! Successfully generated ${data.count} questions`);
     },
     onError: (error) => {
-      toast({ 
-        title: "Generation Failed", 
-        description: error.message,
-        variant: "destructive"
-      });
+      toast.error(`Generation Failed: ${error.message}`);
     }
   });
 

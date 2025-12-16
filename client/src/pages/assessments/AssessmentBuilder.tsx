@@ -32,7 +32,7 @@ import {
   ChevronUp, ChevronDown, X, Wand2, Download, Upload, RefreshCw, Layers
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ============================================================================
 // TYPES
@@ -65,17 +65,19 @@ interface QuestionOption {
 
 interface Assessment {
   id?: number;
-  name: string;
+  title: string;
+  code: string;
   description: string;
   category: string;
-  type: string;
-  frameworkCode?: string;
-  timeLimit?: number;
+  frameworkId?: number;
+  aiConfigId?: number;
+  totalDuration?: number;
+  totalQuestions: number;
   passingScore?: number;
-  randomizeQuestions: boolean;
   showResults: boolean;
-  allowRetake: boolean;
-  maxRetakes?: number;
+  showCorrectAnswers?: boolean;
+  generateReport?: boolean;
+  maxAttempts?: number;
   instructions: string;
   status: string;
   questions: AssessmentQuestion[];
@@ -86,7 +88,6 @@ interface Assessment {
 // ============================================================================
 
 export default function AssessmentBuilderPage() {
-  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("list");
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -137,7 +138,7 @@ export default function AssessmentBuilderPage() {
           <TabsContent value="create">
             <CreateAssessmentForm onCreated={(a) => {
               setSelectedAssessment(a);
-              toast({ title: "Assessment created! Now add questions." });
+              toast.success("Assessment created! Now add questions.");
             }} />
           </TabsContent>
 
@@ -155,7 +156,8 @@ export default function AssessmentBuilderPage() {
 // ============================================================================
 
 function AssessmentList({ onSelect }: { onSelect: (a: Assessment) => void }) {
-  const { data: assessments = [], isLoading, refetch } = trpc.assessmentBuilder.getAllAssessments.useQuery();
+  const { data, isLoading, refetch } = trpc.assessmentBuilder.getAllAssessments.useQuery({});
+  const assessments = data?.assessments || [];
   const deleteMutation = trpc.assessmentBuilder.deleteAssessment.useMutation({
     onSuccess: () => refetch()
   });
@@ -167,7 +169,7 @@ function AssessmentList({ onSelect }: { onSelect: (a: Assessment) => void }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const filteredAssessments = assessments.filter((a: any) => {
-    const matchesSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = a.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || a.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -234,7 +236,7 @@ function AssessmentList({ onSelect }: { onSelect: (a: Assessment) => void }) {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <CardTitle className="text-lg">{assessment.name}</CardTitle>
+                    <CardTitle className="text-lg">{assessment.title}</CardTitle>
                     <Badge className={getCategoryColor(assessment.category)}>
                       {assessment.category}
                     </Badge>
@@ -243,14 +245,21 @@ function AssessmentList({ onSelect }: { onSelect: (a: Assessment) => void }) {
                     </Badge>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => onSelect(assessment)}>
+                    <Button variant="outline" size="sm" onClick={() => onSelect({
+                      ...assessment,
+                      questions: []
+                    })}>
                       <Edit className="h-4 w-4 mr-1" />
                       Edit
                     </Button>
                     <Button 
                       variant="ghost" 
                       size="icon"
-                      onClick={() => duplicateMutation.mutate({ id: assessment.id })}
+                      onClick={() => duplicateMutation.mutate({ 
+                        id: assessment.id,
+                        newTitle: `${assessment.title} (Copy)`,
+                        newCode: `${assessment.code}_copy_${Date.now()}`
+                      })}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
@@ -269,11 +278,11 @@ function AssessmentList({ onSelect }: { onSelect: (a: Assessment) => void }) {
                 <div className="grid grid-cols-5 gap-4 text-sm">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span>{assessment.questionCount || 0} questions</span>
+                    <span>{assessment.totalQuestions || 0} questions</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span>{assessment.timeLimit || 0} min</span>
+                    <span>{assessment.totalDuration || 0} min</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Target className="h-4 w-4 text-muted-foreground" />
@@ -281,11 +290,11 @@ function AssessmentList({ onSelect }: { onSelect: (a: Assessment) => void }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
-                    <span>{assessment.completionCount || 0} completions</span>
+                    <span>{assessment.maxAttempts || 1} attempts</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                    <span>Avg: {assessment.averageScore || 0}%</span>
+                    <span>Code: {assessment.code}</span>
                   </div>
                 </div>
               </CardContent>
@@ -302,32 +311,32 @@ function AssessmentList({ onSelect }: { onSelect: (a: Assessment) => void }) {
 // ============================================================================
 
 function CreateAssessmentForm({ onCreated }: { onCreated: (a: Assessment) => void }) {
-  const { toast } = useToast();
   const createMutation = trpc.assessmentBuilder.createAssessment.useMutation({
     onSuccess: (data) => {
       onCreated({
         ...formData,
         id: data.id,
+        status: "draft",
         questions: []
       } as Assessment);
     },
     onError: (error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast.error(error.message);
     }
   });
 
   const [formData, setFormData] = useState({
-    name: "",
+    title: "",
+    code: "",
     description: "",
-    category: "psychometric",
-    type: "personality",
-    frameworkCode: "big_five",
-    timeLimit: 30,
+    category: "psychometric" as "psychometric" | "competency" | "cognitive" | "skills" | "behavioral" | "leadership" | "custom",
+    totalDuration: 30,
+    totalQuestions: 10,
     passingScore: 70,
-    randomizeQuestions: true,
     showResults: true,
-    allowRetake: false,
-    maxRetakes: 1,
+    showCorrectAnswers: false,
+    generateReport: true,
+    maxAttempts: 1,
     instructions: ""
   });
 
@@ -337,24 +346,15 @@ function CreateAssessmentForm({ onCreated }: { onCreated: (a: Assessment) => voi
     { value: "cognitive", label: "Cognitive Test" },
     { value: "behavioral", label: "Behavioral Assessment" },
     { value: "leadership", label: "Leadership Assessment" },
-    { value: "technical", label: "Technical Skills" },
-    { value: "interview", label: "Structured Interview" }
-  ];
-
-  const frameworks = [
-    { value: "big_five", label: "Big Five (OCEAN)" },
-    { value: "hogan", label: "Hogan HPI" },
-    { value: "disc", label: "DISC" },
-    { value: "eq", label: "Emotional Intelligence" },
-    { value: "shl", label: "SHL OPQ32" },
-    { value: "gallup", label: "Gallup Strengths" },
-    { value: "national_educators", label: "National Educators' Framework" },
-    { value: "custom", label: "Custom Framework" }
+    { value: "skills", label: "Technical Skills" },
+    { value: "custom", label: "Custom Assessment" }
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(formData);
+    // Generate code from title if not provided
+    const code = formData.code || formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    createMutation.mutate({ ...formData, code });
   };
 
   return (
@@ -369,20 +369,32 @@ function CreateAssessmentForm({ onCreated }: { onCreated: (a: Assessment) => voi
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">Assessment Name</Label>
+              <Label htmlFor="title">Assessment Title</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="e.g., Leadership Competency Assessment"
                 required
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="code">Assessment Code</Label>
+              <Input
+                id="code"
+                value={formData.code}
+                onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
+                placeholder="e.g., LEAD_COMP_001 (auto-generated if empty)"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
               <Select 
                 value={formData.category} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
+                onValueChange={(v: any) => setFormData(prev => ({ ...prev, category: v }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -393,6 +405,16 @@ function CreateAssessmentForm({ onCreated }: { onCreated: (a: Assessment) => voi
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Total Questions</Label>
+              <Input
+                type="number"
+                value={formData.totalQuestions}
+                onChange={(e) => setFormData(prev => ({ ...prev, totalQuestions: parseInt(e.target.value) || 1 }))}
+                min={1}
+                max={200}
+              />
             </div>
           </div>
 
@@ -409,29 +431,23 @@ function CreateAssessmentForm({ onCreated }: { onCreated: (a: Assessment) => voi
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Framework</Label>
-              <Select 
-                value={formData.frameworkCode} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, frameworkCode: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {frameworks.map(fw => (
-                    <SelectItem key={fw.value} value={fw.value}>{fw.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Time Limit (minutes)</Label>
+              <Label>Duration (minutes)</Label>
               <Input
                 type="number"
-                value={formData.timeLimit}
-                onChange={(e) => setFormData(prev => ({ ...prev, timeLimit: parseInt(e.target.value) || 0 }))}
+                value={formData.totalDuration}
+                onChange={(e) => setFormData(prev => ({ ...prev, totalDuration: parseInt(e.target.value) || 0 }))}
                 min={0}
                 max={300}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Max Attempts</Label>
+              <Input
+                type="number"
+                value={formData.maxAttempts}
+                onChange={(e) => setFormData(prev => ({ ...prev, maxAttempts: parseInt(e.target.value) || 1 }))}
+                min={1}
+                max={10}
               />
             </div>
           </div>
@@ -454,19 +470,19 @@ function CreateAssessmentForm({ onCreated }: { onCreated: (a: Assessment) => voi
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Switch
-                  id="randomize"
-                  checked={formData.randomizeQuestions}
-                  onCheckedChange={(v) => setFormData(prev => ({ ...prev, randomizeQuestions: v }))}
-                />
-                <Label htmlFor="randomize">Randomize Questions</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch
                   id="showResults"
                   checked={formData.showResults}
                   onCheckedChange={(v) => setFormData(prev => ({ ...prev, showResults: v }))}
                 />
                 <Label htmlFor="showResults">Show Results to Candidates</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="generateReport"
+                  checked={formData.generateReport}
+                  onCheckedChange={(v) => setFormData(prev => ({ ...prev, generateReport: v }))}
+                />
+                <Label htmlFor="generateReport">Generate Report</Label>
               </div>
             </div>
           </div>
@@ -482,7 +498,7 @@ function CreateAssessmentForm({ onCreated }: { onCreated: (a: Assessment) => voi
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" disabled={createMutation.isPending || !formData.name}>
+          <Button type="submit" disabled={createMutation.isPending || !formData.title}>
             {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Create Assessment
           </Button>
@@ -509,7 +525,6 @@ function AssessmentEditor({
   isPreviewMode: boolean;
   setIsPreviewMode: (v: boolean) => void;
 }) {
-  const { toast } = useToast();
   const [questions, setQuestions] = useState<AssessmentQuestion[]>(assessment.questions || []);
   const [showAddQuestion, setShowAddQuestion] = useState(false);
   const [showAIGenerate, setShowAIGenerate] = useState(false);
@@ -517,19 +532,19 @@ function AssessmentEditor({
 
   const updateMutation = trpc.assessmentBuilder.updateAssessment.useMutation({
     onSuccess: () => {
-      toast({ title: "Assessment saved!" });
+      toast.success("Assessment saved!");
     }
   });
 
   const linkQuestionsMutation = trpc.assessmentBuilder.linkQuestionsToAssessment.useMutation({
     onSuccess: () => {
-      toast({ title: "Questions linked to assessment" });
+      toast.success("Questions linked to assessment");
     }
   });
 
   const publishMutation = trpc.assessmentBuilder.publishAssessment.useMutation({
     onSuccess: () => {
-      toast({ title: "Assessment published!" });
+      toast.success("Assessment published!");
       onSave({ ...assessment, status: "published" });
     }
   });
@@ -597,7 +612,7 @@ function AssessmentEditor({
             Back
           </Button>
           <div>
-            <h2 className="text-2xl font-bold">{assessment.name}</h2>
+            <h2 className="text-2xl font-bold">{assessment.title}</h2>
             <p className="text-muted-foreground">{assessment.description}</p>
           </div>
         </div>
@@ -610,8 +625,7 @@ function AssessmentEditor({
             variant="outline"
             onClick={() => updateMutation.mutate({ 
               id: assessment.id!, 
-              name: assessment.name,
-              questions 
+              title: assessment.title
             })}
             disabled={updateMutation.isPending}
           >
@@ -643,7 +657,7 @@ function AssessmentEditor({
           <CardContent className="flex items-center gap-4 pt-6">
             <Clock className="h-8 w-8 text-primary" />
             <div>
-              <p className="text-2xl font-bold">{assessment.timeLimit || 0}</p>
+              <p className="text-2xl font-bold">{assessment.totalDuration || 0}</p>
               <p className="text-muted-foreground text-sm">Minutes</p>
             </div>
           </CardContent>
@@ -782,16 +796,16 @@ function AssessmentEditor({
               <Separator />
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span>Randomize Questions</span>
-                  <Switch checked={assessment.randomizeQuestions} />
-                </div>
-                <div className="flex items-center justify-between text-sm">
                   <span>Show Results</span>
                   <Switch checked={assessment.showResults} />
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span>Allow Retakes</span>
-                  <Switch checked={assessment.allowRetake} />
+                  <span>Show Correct Answers</span>
+                  <Switch checked={assessment.showCorrectAnswers} />
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>Generate Report</span>
+                  <Switch checked={assessment.generateReport} />
                 </div>
               </div>
             </CardContent>
@@ -837,7 +851,6 @@ function AssessmentEditor({
             <DialogTitle>Generate Questions with AI</DialogTitle>
           </DialogHeader>
           <AIGenerateQuestionsForm 
-            frameworkCode={assessment.frameworkCode}
             category={assessment.category}
             onGenerated={(generated) => {
               setQuestions(prev => [
@@ -849,7 +862,7 @@ function AssessmentEditor({
                 }))
               ]);
               setShowAIGenerate(false);
-              toast({ title: `Added ${generated.length} questions!` });
+              toast.success(`Added ${generated.length} questions!`);
             }}
           />
         </DialogContent>
@@ -1081,17 +1094,15 @@ function AddQuestionForm({ onAdd, onCancel }: { onAdd: (q: AssessmentQuestion) =
 // ============================================================================
 
 function AIGenerateQuestionsForm({ 
-  frameworkCode, 
   category,
   onGenerated 
 }: { 
-  frameworkCode?: string;
   category: string;
   onGenerated: (questions: any[]) => void;
 }) {
   const [config, setConfig] = useState({
     category: category,
-    frameworkCode: frameworkCode || "big_five",
+    frameworkCode: "big_five",
     questionTypes: ["scenario", "forced_choice", "likert"],
     count: 10,
     difficulty: "mixed",
@@ -1198,7 +1209,7 @@ function AssessmentPreview({ assessment, onExit }: { assessment: Assessment; onE
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between mb-4">
-            <CardTitle>{assessment.name}</CardTitle>
+            <CardTitle>{assessment.title}</CardTitle>
             <span className="text-muted-foreground">
               Question {currentIndex + 1} of {assessment.questions.length}
             </span>
