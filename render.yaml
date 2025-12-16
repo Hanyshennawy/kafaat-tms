@@ -23,8 +23,8 @@ services:
     # Health check
     healthCheckPath: /health
     
-    # Auto-deploy from master branch (Render default)
-    branch: master
+    # Auto-deploy from main branch
+    branch: main
     
     # Build configuration
     buildFilter:
